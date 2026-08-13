@@ -94,7 +94,7 @@
     .new-rule button {
       padding: 8px 16px; border: none; border-radius: 6px; background: #059669; color: #fff; cursor: pointer; font-size: 13px;
     }
-    .hidden { display: none; }
+    .hidden { display: none !important; }
     .tip { font-size: 12px; color: #9ca3af; margin-top: 10px; line-height: 1.6; }
     .loading { text-align: center; color: #6b7280; padding: 30px; }
     .remember-row { display: flex; align-items: center; gap: 6px; margin-bottom: 14px; font-size: 13px; color: #4b5563; }
@@ -158,8 +158,8 @@
       <input type="password" id="pass-new" placeholder="新密码（至少 6 位）" autocomplete="new-password">
       <input type="password" id="pass-confirm" placeholder="确认新密码" autocomplete="new-password">
       <div class="btn-row">
-        <button class="btn-cancel" id="pass-cancel">取消</button>
-        <button class="btn-ok" id="pass-ok">确认修改</button>
+        <button class="btn-cancel" id="pass-cancel" type="button">取消</button>
+        <button class="btn-ok" id="pass-ok" type="button">确认修改</button>
       </div>
     </div>
   </div>
@@ -407,10 +407,21 @@
       });
     });
 
-    // 启动
+    // 启动：有 token 先验证有效性，无效则回登录页
     if (TOKEN) {
-      showMain();
-      loadRules();
+      api('/me').then(function(d) {
+        if (d.code === 1) {
+          showMain();
+          loadRules();
+        } else {
+          // token 失效，清除并回登录页
+          TOKEN = '';
+          localStorage.removeItem('ipaw_token');
+          showLogin();
+        }
+      }).catch(function() {
+        showLogin();
+      });
     } else {
       showLogin();
     }

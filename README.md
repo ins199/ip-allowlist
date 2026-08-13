@@ -94,6 +94,34 @@ sudo bash deploy.sh [管理端口] [管理密码] [可选域名]
 
 安装时 systemd 已启用开机自启。服务启动时 `main.go` 会自动执行一次 `Reconcile`，把白名单配置恢复为 iptables 规则。无需额外脚本。
 
+### 服务管理（systemd）
+
+```bash
+# 查看服务状态（是否运行）
+systemctl status ip-allowlist
+
+# 重启服务
+systemctl restart ip-allowlist
+
+# 停止服务（⚠️ 停止后 iptables 白名单规则不会被清除，已加的规则仍生效）
+systemctl stop ip-allowlist
+
+# 查看实时日志
+journalctl -u ip-allowlist -f
+
+# 查看最近日志
+journalctl -u ip-allowlist -n 50
+
+# 确认开机自启已开启
+systemctl is-enabled ip-allowlist   # 应输出 enabled
+
+# 修改配置文件后生效
+vi /opt/ip-allowlist/config.yaml
+systemctl restart ip-allowlist
+```
+
+**崩溃自愈**：服务单元配置了 `Restart=always`，进程崩溃后 systemd 会在 3 秒后自动拉起，规则自动恢复。开机也会自启。
+
 ---
 
 ## 使用

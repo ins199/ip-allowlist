@@ -337,6 +337,23 @@ func (s *Server) handleSetStrict(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"code": 0, "msg": "规则不存在"})
 		return
 	}
+	// 开启严格模式时：将当前来源 IP 持久化加入白名单（防锁死，且重启不丢）
+	if req.Strict {
+		cur := clientIP(c)
+		if cur != "" && iptables.ValidIPorCIDR(cur) {
+			has := false
+			for _, item := range rule.AllowList {
+				if item.IP == cur {
+					has = true
+					break
+				}
+			}
+			if !has {
+				_, _ = s.store.AddIP(port, cur, "auto(当前来源)")
+				rule = s.store.GetRule(port)
+			}
+		}
+	}
 	if err := s.ipt.ApplyPortRule(*rule, clientIP(c)); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"code": 0, "msg": "保存成功但应用iptables失败: " + err.Error()})
 		return
