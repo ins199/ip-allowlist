@@ -245,3 +245,126 @@ ip-allowlist/
 3. **iptables 权限**：服务以 root 运行，请确保部署环境可信。
 4. **防锁死**：首次操作请先加当前来源 IP，再开严格模式。
 5. **备份**：`allowlist.json` 建议定期备份（含全部白名单配置）。
+
+---
+
+## 技术架构
+
+### 分层设计
+
+```
+┌────────────────────────────────────────────────────┐
+│  main.go  (入口：加载配置 → 初始化 → 启动)          │
+│   ├── config.go     YAML 配置加载                  │
+│   ├── internal/api       HTTP 层 (gin)            │
+│   │    ├── 路由注册                                │
+│   │    ├── 鉴权中间件 (session token)             │
+│   │    └── handler (rules/ip/strict/... )         │
+│   ├── internal/auth      鉴权                     │
+│   │    ├── bcrypt 密码哈希                         │
+│   │    └── 内存 session 管理                       │
+│   ├── internal/iptables  防火墙核心               │
+│   │    ├── 规则生成 (每端口独立链)                │
+│   │    ├── 规则应用 (重建, 防锁死)                │
+│   │    └── dry-run 模式                           │
+│   └── internal/store     持久化                   │
+│        ├── JSON 文件读写                          │
+│        └── 并发安全 (读写锁)                      │
+└────────────────────────────────────────────────────┘
+```
+
+**各层职责单一，通过明确定义的接口通信**：
+- `api` 层只做 HTTP 入参/出参转换，调用 `store` 读写、`iptables` 应用、`auth` 鉴权
+- `iptables` 层不关心 HTTP，只负责"给定规则 → 生成/应用 iptables 命令"
+- `store` 层不关心防火墙，只负责"配置持久化"
+- 这种隔离让 `iptables` 核心可独立复用（未来中台 Agent 直接内嵌）
+
+### 数据流
+
+```
+用户点击"添加 IP"
+  → api.handleAddIP
+  → store.AddIP (更新 allowlist.json)
+  → iptables.ApplyPortRule (重建 IPAW 链)
+  → 立即生效
+```
+
+### 技术选型
+
+| 组件 | 选择 | 理由 |
+|------|------|------|
+| 语言 | Go | 单二进制、跨平台编译、并发安全、部署零依赖 |
+| Web 框架 | gin | 轻量、性能好、社区成熟 |
+| 前端 | 原生 HTML/JS | 单文件内嵌，无构建步骤，移动端适配 |
+| 密码哈希 | bcrypt | 抗暴力破解，业界标准 |
+| 持久化 | JSON 文件 | 简单可靠，无外部依赖，适合配置型数据 |
+| 防火墙 | iptables | Linux 标配，规则细粒度，fail2ban 兼容 |
+
+---
+
+## 实现原理
+
+### iptables 规则如何工作
+
+对每个受管端口，系统维护一条独立链 `IPAW-<port>`。Linux 内核按链顺序匹配规则，**第一条匹配即生效**：
+
+```
+INPUT 链（按顺序匹配）
+  1. ACCEPT  tcp dpt:8443          # 原有规则
+  2. IPAW-22                       # 本系统插入，优先于 fail2ban
+  3. f2b-sshd                      # fail2ban 兜底
+  ...
+```
+
+进入 `IPAW-22` 链后：
+```
+IPAW-22
+  1. -s 203.0.113.10/32 -j ACCEPT   # 白名单 → 放行
+  2. -s 127.0.0.1/32 -j ACCEPT      # 当前来源 → 放行(自动补)
+  3. -j RETURN                      # 其他 → 回 INPUT 继续匹配
+```
+
+- **宽松模式**：链里只有 ACCEPT + RETURN，非白名单回 INPUT 走 fail2ban，只记录不阻断。
+- **严格模式**：INPUT 链末尾追加 `-j DROP`，非白名单直接丢弃，fail2ban 之前就拦下。
+
+### 防锁死机制（核心安全设计）
+
+这是整个系统最重要的设计，防止误操作把 SSH 永久锁死：
+
+| 机制 | 实现 | 何时触发 |
+|------|------|---------|
+| 自动补当前 IP | `ApplyPortRule` 应用前，若当前来源 IP 不在白名单则自动加入 | 每次应用规则时 |
+| 禁止删当前 IP | `handleDelIP` 校验，严格模式下拒绝 | 删除时 |
+| 禁止删到空 | 严格模式下删到白名单为空则回滚 | 删除时 |
+| 先 ACCEPT 后 DROP | 规则顺序保证白名单放行优先 | 每次重建链 |
+| 严格模式空白名单拒绝 | `ApplyPortRule` 拒绝应用，防止裸 DROP | 应用时 |
+
+**为什么顺序重要**：iptables 按顺序匹配，若 DROP 在 ACCEPT 之前，白名单 IP 也会被丢。系统始终保证 ACCEPT 在前。
+
+### 幂等与重启恢复
+
+- 应用规则采用**重建**而非逐条增删：删旧链 → 建新链 → 全量重写。保证可重复执行、顺序正确。
+- 服务启动时调用 `Reconcile`，从 `allowlist.json` 重建全部规则。
+- systemd `Restart=always`，进程崩溃自动拉起，规则自动恢复。
+- 即使 `iptables` 重启（内核规则丢失），服务启动也会自动重建。
+
+### dry-run 模式
+
+`IPAW_DRY_RUN=1` 时，所有 iptables 操作只打印不执行：
+
+```
+[dry-run] iptables -N IPAW-22
+[dry-run] iptables -A IPAW-22 -s 203.0.113.10/32 -j ACCEPT
+```
+
+用于本地开发、规则验证、CI 测试，**不会真正改动防火墙**，避免误操作。
+
+---
+
+## 开源
+
+本项目采用 [MIT License](LICENSE)。
+
+**欢迎贡献**：提 issue、PR、或 star 支持。核心待办见 [plans/plan.md](plans/plan.md)。
+
+**演进方向**：当前单机版适用于几十台服务器；远期可演进为"中台管理端 + 每服务器轻量 Agent"，`internal/iptables` 核心逻辑可直接复用。
