@@ -41,6 +41,11 @@
 
 ## 待办
 
+- [ ] **部署链路升级：零依赖一键安装**（2026-08-13 决策：不做 Docker，用 Release 预编译二进制）
+  - 新建 `.github/workflows/release.yml`：打 tag `v*` 触发，CGO_ENABLED=0 交叉编译 linux/amd64 + arm64 并上传 Release
+  - 改 `deploy.sh`：无 Go 时按 `uname -m` 从 Release 下载预编译二进制（支持 `IPAW_VERSION` 指定版本）
+  - 更新 README 快速部署章节：明示无需装 Go/Docker/任何工具链，只需 Linux 标配 iptables；补"发版"说明
+  - 边界：不改 Go 源码/API/配置字段；不引入 Docker
 - [ ] 单元测试（iptables 规则生成、store 增删、auth 密码）
 - [ ] 生产部署验证
 - [ ] 迁移到 GitHub
