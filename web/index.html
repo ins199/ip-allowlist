@@ -1,0 +1,419 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>IP 白名单管理</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: #f4f6f9;
+      color: #212529;
+      min-height: 100vh;
+    }
+    .login-wrap {
+      max-width: 360px; margin: 15vh auto; padding: 30px;
+      background: #fff; border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,.08);
+    }
+    .login-wrap h1 { font-size: 20px; margin-bottom: 20px; text-align: center; color: #1a73e8; }
+    .login-wrap input {
+      width: 100%; padding: 11px 14px; margin-bottom: 14px;
+      border: 1px solid #dce0e4; border-radius: 8px; font-size: 14px;
+    }
+    .login-wrap button {
+      width: 100%; padding: 12px; border: none; border-radius: 8px;
+      background: #1a73e8; color: #fff; font-size: 15px; cursor: pointer;
+    }
+    .login-wrap button:hover { background: #1765cc; }
+    .login-err { color: #d93025; font-size: 13px; margin-bottom: 10px; text-align: center; min-height: 18px; }
+
+    .container { max-width: 900px; margin: 0 auto; padding: 20px; }
+    .topbar {
+      display: flex; align-items: center; justify-content: space-between;
+      background: #fff; padding: 14px 20px; border-radius: 10px;
+      box-shadow: 0 2px 8px rgba(0,0,0,.05); margin-bottom: 16px;
+    }
+    .topbar h1 { font-size: 18px; color: #1a73e8; }
+    .topbar .info { font-size: 13px; color: #6b7280; }
+    .topbar button {
+      padding: 7px 14px; border: none; border-radius: 6px; cursor: pointer; font-size: 13px;
+    }
+    #logout-btn { background: #f3f4f6; color: #374151; }
+    #logout-btn:hover { background: #e5e7eb; }
+
+    .card { background: #fff; border-radius: 10px; box-shadow: 0 2px 8px rgba(0,0,0,.05); margin-bottom: 16px; }
+    .card-header { padding: 14px 20px; border-bottom: 1px solid #f0f0f0; font-weight: 600; display: flex; justify-content: space-between; align-items: center; }
+    .card-body { padding: 18px 20px; }
+
+    .rule { border: 1px solid #e5e7eb; border-radius: 8px; padding: 14px; margin-bottom: 12px; }
+    .rule-head { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; flex-wrap: wrap; }
+    .rule-head .port {
+      font-weight: 700; font-size: 16px; color: #1a73e8; min-width: 60px;
+    }
+    .rule-head .comment { color: #6b7280; font-size: 14px; flex: 1; }
+    .rule-head .badge {
+      font-size: 12px; padding: 3px 10px; border-radius: 12px;
+    }
+    .badge.strict { background: #fee2e2; color: #b91c1c; }
+    .badge.loose { background: #dcfce7; color: #15803d; }
+    .rule-head .sync-btn, .rule-head .del-rule-btn {
+      font-size: 12px; padding: 4px 10px; border: none; border-radius: 6px; cursor: pointer;
+    }
+    .sync-btn { background: #f3f4f6; color: #374151; }
+    .del-rule-btn { background: #fee2e2; color: #b91c1c; }
+
+    .ip-item {
+      display: inline-flex; align-items: center; gap: 6px;
+      background: #f3f4f6; border-radius: 16px; padding: 5px 12px; margin: 4px 6px 4px 0; font-size: 13px;
+    }
+    .ip-item.current { background: #e0e7ff; }
+    .ip-item .remark { color: #9ca3af; font-size: 12px; }
+    .ip-item .del-ip {
+      border: none; background: transparent; color: #9ca3af; cursor: pointer; font-size: 14px; line-height: 1;
+    }
+    .ip-item .del-ip:hover { color: #d93025; }
+    .ip-item .cur-tag { font-size: 11px; color: #6366f1; }
+
+    .add-row { display: flex; gap: 8px; margin-top: 12px; flex-wrap: wrap; }
+    .add-row input {
+      padding: 8px 12px; border: 1px solid #dce0e4; border-radius: 6px; font-size: 13px;
+    }
+    .add-row input.ip-input { flex: 1; min-width: 180px; }
+    .add-row input.remark-input { flex: .6; min-width: 120px; }
+    .add-row button {
+      padding: 8px 16px; border: none; border-radius: 6px; background: #1a73e8; color: #fff; cursor: pointer; font-size: 13px;
+    }
+    .add-row button:hover { background: #1765cc; }
+
+    .strict-toggle { margin-top: 12px; font-size: 13px; display: flex; align-items: center; gap: 8px; }
+    .strict-toggle input { width: auto; }
+
+    .new-rule { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+    .new-rule input { padding: 8px 12px; border: 1px solid #dce0e4; border-radius: 6px; font-size: 13px; }
+    .new-rule button {
+      padding: 8px 16px; border: none; border-radius: 6px; background: #059669; color: #fff; cursor: pointer; font-size: 13px;
+    }
+    .hidden { display: none; }
+    .tip { font-size: 12px; color: #9ca3af; margin-top: 10px; line-height: 1.6; }
+    .loading { text-align: center; color: #6b7280; padding: 30px; }
+    .remember-row { display: flex; align-items: center; gap: 6px; margin-bottom: 14px; font-size: 13px; color: #4b5563; }
+    .remember-row input { width: auto; margin: 0; }
+
+    /* 修改密码弹窗 */
+    .modal-mask {
+      position: fixed; inset: 0; background: rgba(0,0,0,.4);
+      display: flex; align-items: center; justify-content: center; z-index: 100;
+    }
+    .modal {
+      background: #fff; border-radius: 12px; padding: 24px; width: 92%; max-width: 380px;
+      box-shadow: 0 8px 30px rgba(0,0,0,.2);
+    }
+    .modal h2 { font-size: 17px; margin-bottom: 16px; }
+    .modal input { width: 100%; padding: 10px 12px; margin-bottom: 12px; border: 1px solid #dce0e4; border-radius: 8px; font-size: 14px; }
+    .modal .btn-row { display: flex; gap: 10px; justify-content: flex-end; }
+    .modal button { padding: 9px 16px; border: none; border-radius: 8px; cursor: pointer; font-size: 14px; }
+    .modal .btn-ok { background: #1a73e8; color: #fff; }
+    .modal .btn-ok:hover { background: #1765cc; }
+    .modal .btn-cancel { background: #f3f4f6; color: #374151; }
+
+    /* 移动端适配 */
+    @media (max-width: 640px) {
+      body { background: #fff; }
+      .container { padding: 10px; }
+      .topbar { flex-wrap: wrap; gap: 8px; padding: 12px; }
+      .topbar h1 { font-size: 16px; }
+      .topbar .info { width: 100%; order: 3; }
+      .card-header { padding: 12px; }
+      .card-body { padding: 14px 12px; }
+      .add-row input.ip-input { flex: 1 1 100%; }
+      .add-row input.remark-input { flex: 1 1 60%; }
+      .rule-head { gap: 6px; }
+      .rule-head .port { min-width: 50px; font-size: 15px; }
+      .new-rule input { width: 100% !important; }
+      .new-rule button { width: 100%; }
+      .strict-toggle { flex-wrap: wrap; }
+    }
+  </style>
+</head>
+<body>
+  <!-- 登录 -->
+  <div id="login-view" class="login-wrap hidden">
+    <h1>IP 白名单管理</h1>
+    <div class="login-err" id="login-err"></div>
+    <input type="text" id="login-username" placeholder="用户名" autocomplete="username">
+    <input type="password" id="login-password" placeholder="密码" autocomplete="current-password">
+    <div class="remember-row">
+      <input type="checkbox" id="login-remember" checked>
+      <label for="login-remember">记住我（保持登录 30 天）</label>
+    </div>
+    <button id="login-btn">登录</button>
+  </div>
+
+  <!-- 修改密码弹窗 -->
+  <div id="pass-modal" class="modal-mask hidden">
+    <div class="modal">
+      <h2>修改密码</h2>
+      <input type="password" id="pass-old" placeholder="旧密码" autocomplete="current-password">
+      <input type="password" id="pass-new" placeholder="新密码（至少 6 位）" autocomplete="new-password">
+      <input type="password" id="pass-confirm" placeholder="确认新密码" autocomplete="new-password">
+      <div class="btn-row">
+        <button class="btn-cancel" id="pass-cancel">取消</button>
+        <button class="btn-ok" id="pass-ok">确认修改</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 主界面 -->
+  <div id="main-view" class="container hidden">
+    <div class="topbar">
+      <h1>🔒 IP 白名单管理</h1>
+      <div class="info">
+        <span>当前来源：<code id="current-ip">--</code></span>
+      </div>
+      <button id="change-pass-btn" style="background:#f3f4f6;color:#374151;margin-right:8px;">修改密码</button>
+      <button id="logout-btn">退出</button>
+    </div>
+
+    <!-- 新增端口规则 -->
+    <div class="card">
+      <div class="card-header">➕ 新增端口规则</div>
+      <div class="card-body">
+        <div class="new-rule">
+          <input type="number" id="new-port" placeholder="端口号(如 22)" style="width:120px;">
+          <input type="text" id="new-comment" placeholder="用途说明(如 SSH)" style="width:180px;">
+          <label style="font-size:13px;display:flex;align-items:center;gap:4px;">
+            <input type="checkbox" id="new-strict"> 严格模式
+          </label>
+          <button id="add-rule-btn">创建规则</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 规则列表 -->
+    <div id="rules-list"><div class="card"><div class="loading">加载中...</div></div></div>
+
+    <div class="tip">
+      提示：严格模式下仅白名单 IP 可连接该端口。系统会自动将你的当前来源 IP 加入白名单，防止误删锁死。
+      禁止删除当前来源 IP，严格模式至少保留一条白名单。
+    </div>
+  </div>
+
+  <script>
+    var TOKEN = localStorage.getItem('ipaw_token') || '';
+
+    function api(path, opts) {
+      opts = opts || {};
+      opts.headers = opts.headers || {};
+      if (TOKEN) opts.headers['X-Auth-Token'] = TOKEN;
+      if (opts.body && typeof opts.body === 'object') {
+        opts.headers['Content-Type'] = 'application/json';
+        opts.body = JSON.stringify(opts.body);
+      }
+      return fetch('/api' + path, opts).then(function(r) { return r.json(); });
+    }
+
+    function esc(s) {
+      var d = document.createElement('div');
+      d.textContent = s == null ? '' : String(s);
+      return d.innerHTML;
+    }
+
+    // ===== 登录 =====
+    function showLogin() {
+      document.getElementById('login-view').classList.remove('hidden');
+      document.getElementById('main-view').classList.add('hidden');
+    }
+    function showMain() {
+      document.getElementById('login-view').classList.add('hidden');
+      document.getElementById('main-view').classList.remove('hidden');
+    }
+    document.getElementById('login-btn').addEventListener('click', function() {
+      var u = document.getElementById('login-username').value.trim();
+      var p = document.getElementById('login-password').value;
+      var remember = document.getElementById('login-remember').checked;
+      api('/login', { method: 'POST', body: { username: u, password: p, remember: remember } }).then(function(d) {
+        if (d.code === 1) {
+          TOKEN = d.data.token;
+          localStorage.setItem('ipaw_token', TOKEN);
+          showMain();
+          loadRules();
+        } else {
+          document.getElementById('login-err').textContent = d.msg || '登录失败';
+        }
+      }).catch(function() { document.getElementById('login-err').textContent = '网络错误'; });
+    });
+    document.getElementById('logout-btn').addEventListener('click', function() {
+      api('/logout', { method: 'POST' }).then(function() {
+        TOKEN = '';
+        localStorage.removeItem('ipaw_token');
+        showLogin();
+      });
+    });
+    document.getElementById('login-password').addEventListener('keydown', function(e) {
+      if (e.key === 'Enter') document.getElementById('login-btn').click();
+    });
+
+    // ===== 修改密码 =====
+    function openPassModal() {
+      document.getElementById('pass-modal').classList.remove('hidden');
+      document.getElementById('pass-old').value = '';
+      document.getElementById('pass-new').value = '';
+      document.getElementById('pass-confirm').value = '';
+      document.getElementById('pass-old').focus();
+    }
+    function closePassModal() {
+      document.getElementById('pass-modal').classList.add('hidden');
+    }
+    document.getElementById('change-pass-btn').addEventListener('click', openPassModal);
+    document.getElementById('pass-cancel').addEventListener('click', closePassModal);
+    document.getElementById('pass-ok').addEventListener('click', function() {
+      var oldP = document.getElementById('pass-old').value;
+      var newP = document.getElementById('pass-new').value;
+      var cfm = document.getElementById('pass-confirm').value;
+      if (newP !== cfm) { alert('两次输入的新密码不一致'); return; }
+      api('/change-password', { method: 'POST', body: { old_password: oldP, new_password: newP } }).then(function(d) {
+        if (d.code === 1) {
+          alert('密码已修改，请重新登录');
+          closePassModal();
+          TOKEN = '';
+          localStorage.removeItem('ipaw_token');
+          showLogin();
+        } else {
+          alert(d.msg || '修改失败');
+        }
+      }).catch(function() { alert('修改失败: 网络错误'); });
+    });
+    document.getElementById('pass-modal').addEventListener('click', function(e) {
+      if (e.target === this) closePassModal();
+    });
+
+    // ===== 规则列表 =====
+    function renderRules(rules) {
+      var box = document.getElementById('rules-list');
+      if (!rules.length) {
+        box.innerHTML = '<div class="card"><div class="loading">暂无规则，先在上方创建</div></div>';
+        return;
+      }
+      box.innerHTML = rules.map(function(r) {
+        var badge = r.strict
+          ? '<span class="badge strict">严格模式</span>'
+          : '<span class="badge loose">宽松模式</span>';
+        var items = (r.allow_list || []).map(function(item) {
+          var isCur = item.ip === r.current_ip;
+          var curTag = isCur ? '<span class="cur-tag">当前</span>' : '';
+          var delBtn = isCur
+            ? ''
+            : '<button class="del-ip" data-port="' + r.port + '" data-ip="' + esc(item.ip) + '" title="删除">✕</button>';
+          var remark = item.remark ? '<span class="remark">(' + esc(item.remark) + ')</span>' : '';
+          return '<span class="ip-item' + (isCur ? ' current' : '') + '">' + esc(item.ip) + remark + curTag + delBtn + '</span>';
+        }).join('') || '<span style="color:#9ca3af;font-size:13px;">暂无白名单 IP</span>';
+
+        return '<div class="rule">' +
+          '<div class="rule-head">' +
+            '<span class="port">:' + r.port + '</span>' +
+            '<span class="comment">' + esc(r.comment || '') + '</span>' +
+            badge +
+            '<button class="sync-btn" data-port="' + r.port + '">同步规则</button>' +
+            '<button class="del-rule-btn" data-port="' + r.port + '">删除规则</button>' +
+          '</div>' +
+          '<div class="card-body">' +
+            '<div>' + items + '</div>' +
+            '<div class="add-row">' +
+              '<input class="ip-input" id="ip-' + r.port + '" placeholder="输入 IP 或 CIDR">' +
+              '<input class="remark-input" id="remark-' + r.port + '" placeholder="备注">' +
+              '<button class="add-ip-btn" data-port="' + r.port + '">+ 添加</button>' +
+            '</div>' +
+            '<div class="strict-toggle">' +
+              '<label><input type="checkbox" data-port="' + r.port + '" ' + (r.strict ? 'checked' : '') + '> 启用严格模式（仅白名单可连）</label>' +
+            '</div>' +
+          '</div>' +
+        '</div>';
+      }).join('');
+    }
+
+    function loadRules() {
+      api('/rules').then(function(d) {
+        if (d.code !== 1) { showLogin(); return; }
+        var rules = d.data || [];
+        document.getElementById('current-ip').textContent = rules.length ? (rules[0].current_ip || '--') : '--';
+        renderRules(rules);
+      }).catch(function() { document.getElementById('rules-list').innerHTML = '<div class="card"><div class="loading">加载失败</div></div>'; });
+    }
+
+    // 事件委托
+    document.getElementById('rules-list').addEventListener('click', function(e) {
+      var addBtn = e.target.closest('.add-ip-btn');
+      if (addBtn) {
+        var port = addBtn.getAttribute('data-port');
+        var ip = document.getElementById('ip-' + port).value.trim();
+        var remark = document.getElementById('remark-' + port).value.trim();
+        if (!ip) { alert('请输入 IP'); return; }
+        api('/rule/' + port + '/ip', { method: 'POST', body: { ip: ip, remark: remark } }).then(function(d) {
+          alert(d.msg || (d.code === 1 ? '成功' : '失败'));
+          if (d.code === 1) loadRules();
+        });
+        return;
+      }
+      var delIp = e.target.closest('.del-ip');
+      if (delIp) {
+        var port = delIp.getAttribute('data-port');
+        var ip = delIp.getAttribute('data-ip');
+        if (!confirm('确认删除白名单 IP: ' + ip + ' ?')) return;
+        api('/rule/' + port + '/ip/' + encodeURIComponent(ip), { method: 'DELETE' }).then(function(d) {
+          alert(d.msg || (d.code === 1 ? '成功' : '失败'));
+          if (d.code === 1) loadRules();
+        });
+        return;
+      }
+      var sync = e.target.closest('.sync-btn');
+      if (sync) {
+        api('/sync').then(function(d) { alert(d.msg || '同步完成'); loadRules(); });
+        return;
+      }
+      var delRule = e.target.closest('.del-rule-btn');
+      if (delRule) {
+        var port = delRule.getAttribute('data-port');
+        if (!confirm('确认删除端口 ' + port + ' 的全部白名单规则？')) return;
+        api('/rule/' + port, { method: 'DELETE' }).then(function(d) {
+          alert(d.msg || (d.code === 1 ? '成功' : '失败'));
+          if (d.code === 1) loadRules();
+        });
+      }
+    });
+
+    document.getElementById('rules-list').addEventListener('change', function(e) {
+      var cb = e.target.closest('input[data-port][type=checkbox]');
+      if (!cb) return;
+      var port = cb.getAttribute('data-port');
+      api('/rule/' + port + '/strict', { method: 'POST', body: { strict: cb.checked } }).then(function(d) {
+        alert(d.msg || (d.code === 1 ? '成功' : '失败'));
+        loadRules();
+      });
+    });
+
+    document.getElementById('add-rule-btn').addEventListener('click', function() {
+      var port = document.getElementById('new-port').value.trim();
+      var comment = document.getElementById('new-comment').value.trim();
+      var strict = document.getElementById('new-strict').checked;
+      if (!port) { alert('请输入端口'); return; }
+      api('/rule', { method: 'POST', body: { port: parseInt(port, 10), comment: comment, strict: strict } }).then(function(d) {
+        alert(d.msg || (d.code === 1 ? '成功' : '失败'));
+        if (d.code === 1) {
+          document.getElementById('new-port').value = '';
+          document.getElementById('new-comment').value = '';
+          loadRules();
+        }
+      });
+    });
+
+    // 启动
+    if (TOKEN) {
+      showMain();
+      loadRules();
+    } else {
+      showLogin();
+    }
+  </script>
+</body>
+</html>

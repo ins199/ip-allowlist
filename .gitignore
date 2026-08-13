@@ -1,0 +1,19 @@
+# 二进制
+ip-allowlist
+*.exe
+
+# 数据文件（含白名单敏感信息）
+allowlist.json
+config.yaml
+
+# Go 编译缓存
+*.test
+*.out
+
+# IDE
+.idea/
+.vscode/
+.DS_Store
+
+# 日志
+*.log

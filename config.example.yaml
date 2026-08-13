@@ -1,0 +1,8 @@
+# ip-allowlist 配置示例
+server:
+  addr: "0.0.0.0:10443"         # HTTP 监听地址（用不常用端口，减少被扫描）
+  data_file: "/opt/ip-allowlist/allowlist.json"  # 白名单数据文件
+auth:
+  username: "admin"              # 管理账号
+  password: "changeme"           # 管理密码（部署后立即修改）
+  session_hours: 24              # 会话有效期（小时）

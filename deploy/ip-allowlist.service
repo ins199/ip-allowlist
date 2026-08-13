@@ -1,0 +1,19 @@
+# ip-allowlist systemd 服务单元
+# 安装到 /etc/systemd/system/ip-allowlist.service
+[Unit]
+Description=IP Allowlist Manager
+After=network.target
+
+[Service]
+Type=simple
+# 必须 root 运行才能操作 iptables
+User=root
+Group=root
+ExecStart=/opt/ip-allowlist/ip-allowlist -config /opt/ip-allowlist/config.yaml -data /opt/ip-allowlist/allowlist.json
+Restart=always
+RestartSec=3
+# 关闭 dry-run（若需要本地模拟测试可设为 1）
+Environment=IPAW_DRY_RUN=0
+
+[Install]
+WantedBy=multi-user.target
