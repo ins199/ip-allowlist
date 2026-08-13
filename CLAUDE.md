@@ -21,7 +21,7 @@ ip-allowlist/
 │   ├── iptables/        # iptables 规则生成/应用/防锁死
 │   └── store/           # JSON 持久化
 ├── web/                 # 前端页面（内嵌单页）
-├── deploy/              # install.sh + systemd 单元
+├── deploy.sh            # 一键部署入口（curl 远程/本地）
 └── plans/plan.md        # 开发计划
 ```
 

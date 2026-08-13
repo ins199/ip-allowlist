@@ -26,7 +26,7 @@
 - [x] 账号密码登录（bcrypt 哈希）
 - [x] 修改密码 + 记住登录（长会话，勾选 30 天）
 - [x] 移动端适配（响应式布局）
-- [x] deploy/install.sh 一键部署 + systemd 单元
+- [x] deploy.sh 一键部署（curl 远程/本地）+ systemd 单元
 - [x] README 完整文档
 
 ## 测试清单

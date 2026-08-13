@@ -66,31 +66,28 @@
 
 ## 快速部署
 
-### 前置
-- Linux 宿主机（Ubuntu/CentOS 均可），root 权限
-- 已安装 `iptables`
-
-### 步骤
+### 方式一：curl 一键安装（推荐，免克隆）
 
 ```bash
-# 1. 本地编译 Linux 二进制
-cd ip-allowlist
-GOOS=linux GOARCH=amd64 go build -o ip-allowlist .
-
-# 2. 将整个目录传到服务器（含 deploy/）
-scp -r ip-allowlist root@<服务器>:/tmp/
-
-# 3. 服务器上安装（指定管理端口、密码、可选域名）
-cd /tmp/ip-allowlist
-sudo bash deploy/install.sh 10443 你的管理密码 你的域名.com
-
-# 4. 打开管理页面
-浏览器访问 http://<服务器IP>:10443
-登录 admin / 你的管理密码
+sudo bash -c "$(curl -fsSL https://raw.githubusercontent.com/ins199/ip-allowlist/master/deploy.sh)" 10443 MyPass123
 ```
 
-> ⚠️ 部署后**立即修改默认密码**（install.sh 默认 `changeme`）。
-> ⚠️ 默认端口 `10443`（不常用，减少被扫描），可在 install.sh 参数或 config.yaml 修改。
+一条命令完成：拉取安装脚本 → 自动下载/编译二进制 → 安装 systemd → 启动。无需克隆代码。
+
+### 方式二：克隆后一键部署
+
+```bash
+git clone https://github.com/ins199/ip-allowlist.git
+cd ip-allowlist
+sudo bash deploy.sh [管理端口] [管理密码] [可选域名]
+```
+
+**场景说明**：
+- 服务器有 Go：`deploy.sh` 自动编译 Linux 二进制后部署
+- 服务器无 Go：在本地编译 `GOOS=linux GOARCH=amd64 go build -o deploy/ip-allowlist .`，把 `deploy/ip-allowlist` 传上去再跑 `deploy.sh`
+
+> ⚠️ 部署后**立即修改默认密码**（默认 `changeme`）。
+> ⚠️ 默认端口 `10443`（不常用，减少被扫描），可改参数或 config.yaml。
 > 强烈建议配置域名 + nginx 反代 + HTTPS（见下文"域名与 HTTPS"）。
 
 ### 开机自启 + 规则恢复
@@ -232,7 +229,8 @@ ip-allowlist/
 │   ├── iptables/           # 规则生成/应用/防锁死
 │   └── store/              # JSON 持久化
 ├── web/                    # 前端页面
-├── deploy/                 # install.sh + systemd 单元
+├── deploy.sh               # 一键部署入口（curl 远程/本地都支持）
+├── deploy/                 # systemd 单元
 └── README.md
 ```
 
@@ -310,7 +308,7 @@ ip-allowlist/
 
 ```
 INPUT 链（按顺序匹配）
-  1. ACCEPT  tcp dpt:8443          # 原有规则
+  1. ACCEPT  tcp dpt:<其他服务端口>   # 服务器原有规则
   2. IPAW-22                       # 本系统插入，优先于 fail2ban
   3. f2b-sshd                      # fail2ban 兜底
   ...
