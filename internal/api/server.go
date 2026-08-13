@@ -61,7 +61,7 @@ func New(st *store.Store, ipt *iptables.Executor, a *auth.Auth) *Server {
 // Handler 返回 gin 引擎（供 main 启动）。
 func (s *Server) Handler() http.Handler { return s.router }
 
-// Run 启动 HTTP 服务，addr 形如 "0.0.0.0:8443"。
+// Run 启动 HTTP 服务，addr 形如 "0.0.0.0:10443"。
 func (s *Server) Run(addr string) error {
 	return s.router.Run(addr)
 }

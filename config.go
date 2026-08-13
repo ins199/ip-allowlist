@@ -15,7 +15,7 @@ type Config struct {
 
 // ServerCfg HTTP 服务配置
 type ServerCfg struct {
-	Addr     string `yaml:"addr"`      // 监听地址，如 0.0.0.0:8443
+	Addr     string `yaml:"addr"`      // 监听地址，如 0.0.0.0:10443
 	DataFile string `yaml:"data_file"` // 白名单数据文件路径
 }
 

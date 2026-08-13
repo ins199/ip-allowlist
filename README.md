@@ -152,7 +152,7 @@ sudo bash deploy/install.sh 10443 你的管理密码 你的域名.com
 
 ```yaml
 server:
-  addr: "0.0.0.0:8443"                  # 监听地址
+  addr: "0.0.0.0:10443"                  # 监听地址
   data_file: "/opt/ip-allowlist/allowlist.json"  # 白名单数据
 auth:
   username: "admin"                      # 管理账号
@@ -211,10 +211,10 @@ server {
 go build ./...
 
 # 运行（dry-run 模式，只打印 iptables 命令，不真正改动防火墙）
-IPAW_DRY_RUN=1 go run . -config config.example.yaml -data /tmp/test-allowlist.json -bind 127.0.0.1:8443
+IPAW_DRY_RUN=1 go run . -config config.example.yaml -data /tmp/test-allowlist.json -bind 127.0.0.1:10443
 
 # 登录测试
-curl -X POST http://127.0.0.1:8443/api/login -d '{"username":"admin","password":"changeme"}' -H 'Content-Type: application/json'
+curl -X POST http://127.0.0.1:10443/api/login -d '{"username":"admin","password":"changeme"}' -H 'Content-Type: application/json'
 ```
 
 ---
