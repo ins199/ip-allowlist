@@ -141,7 +141,7 @@ func (s *Store) AddIP(port int, ip, remark string) (bool, error) {
 	}
 	if idx < 0 {
 		s.cfg.Rules = append(s.cfg.Rules, PortRule{
-			Port:    port,
+			Port:      port,
 			AllowList: []AllowItem{{IP: ip, Remark: remark}},
 		})
 		return true, s.saveLocked()

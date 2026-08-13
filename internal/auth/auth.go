@@ -11,11 +11,11 @@ import (
 
 // Auth JWT 鉴权管理器。
 type Auth struct {
-	secret         []byte
-	username       string
-	passHash       []byte
-	shortTTL       time.Duration // 默认会话时长
-	longTTL        time.Duration // "记住我"会话时长
+	secret          []byte
+	username        string
+	passHash        []byte
+	shortTTL        time.Duration // 默认会话时长
+	longTTL         time.Duration // "记住我"会话时长
 	persistPassword func(newPassword string) error
 }
 

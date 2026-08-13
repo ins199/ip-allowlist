@@ -131,8 +131,8 @@ func clientIP(c *gin.Context) string {
 
 type loginReq struct {
 	Username string `json:"username" example:"admin"` // 用户名
-	Password string `json:"password" example:"***"`    // 密码
-	Remember bool   `json:"remember" example:"true"`   // 记住我（长会话）
+	Password string `json:"password" example:"***"`   // 密码
+	Remember bool   `json:"remember" example:"true"`  // 记住我（长会话）
 }
 
 func (s *Server) handleLogin(c *gin.Context) {
@@ -177,12 +177,12 @@ func (s *Server) handleLogout(c *gin.Context) {
 
 // ResForRule 端口规则响应。
 type ResForRule struct {
-	Port      int              `json:"port"`      // 端口号
-	Comment   string           `json:"comment"`   // 用途说明
-	Strict    bool             `json:"strict"`    // 严格模式
+	Port      int               `json:"port"`       // 端口号
+	Comment   string            `json:"comment"`    // 用途说明
+	Strict    bool              `json:"strict"`     // 严格模式
 	AllowList []store.AllowItem `json:"allow_list"` // 白名单
-	CurrentIP string           `json:"current_ip"` // 当前请求来源 IP
-	DropOn    bool             `json:"drop_on"`    // INPUT 是否已启用 DROP
+	CurrentIP string            `json:"current_ip"` // 当前请求来源 IP
+	DropOn    bool              `json:"drop_on"`    // INPUT 是否已启用 DROP
 }
 
 func (s *Server) handleListRules(c *gin.Context) {
@@ -215,10 +215,34 @@ func (s *Server) handleMe(c *gin.Context) {
 	}})
 }
 
+// persistCurrentIP 严格模式下将当前来源 IP 持久化加入白名单，返回最新规则。
+// 让「编辑/创建规则」与「切换严格模式」两条路径的防锁死行为保持一致（重启不丢当前 IP）。
+func (s *Server) persistCurrentIP(c *gin.Context, port int, rule store.PortRule) store.PortRule {
+	if !rule.Strict {
+		return rule
+	}
+	cur := clientIP(c)
+	if cur == "" || !iptables.ValidIPorCIDR(cur) {
+		return rule
+	}
+	for _, item := range rule.AllowList {
+		if item.IP == cur {
+			return rule
+		}
+	}
+	if _, err := s.store.AddIP(port, cur, "auto(当前来源)"); err != nil {
+		return rule
+	}
+	if updated := s.store.GetRule(port); updated != nil {
+		return *updated
+	}
+	return rule
+}
+
 type ruleReq struct {
-	Port    int    `json:"port" example:"22"`        // 端口号
-	Comment string `json:"comment" example:"SSH"`     // 用途说明
-	Strict  bool   `json:"strict" example:"true"`      // 严格模式
+	Port    int    `json:"port" example:"22"`     // 端口号
+	Comment string `json:"comment" example:"SSH"` // 用途说明
+	Strict  bool   `json:"strict" example:"true"` // 严格模式
 }
 
 func (s *Server) handleUpsertRule(c *gin.Context) {
@@ -236,6 +260,8 @@ func (s *Server) handleUpsertRule(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"code": 0, "msg": err.Error()})
 		return
 	}
+	// 严格模式下补当前来源 IP 持久化（防锁死，与切换严格模式路径一致）
+	rule = s.persistCurrentIP(c, req.Port, rule)
 	if err := s.ipt.ApplyPortRule(rule, clientIP(c)); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"code": 0, "msg": "保存成功但应用iptables失败: " + err.Error()})
 		return
@@ -369,23 +395,8 @@ func (s *Server) handleSetStrict(c *gin.Context) {
 		return
 	}
 	// 开启严格模式时：将当前来源 IP 持久化加入白名单（防锁死，且重启不丢）
-	if req.Strict {
-		cur := clientIP(c)
-		if cur != "" && iptables.ValidIPorCIDR(cur) {
-			has := false
-			for _, item := range rule.AllowList {
-				if item.IP == cur {
-					has = true
-					break
-				}
-			}
-			if !has {
-				_, _ = s.store.AddIP(port, cur, "auto(当前来源)")
-				rule = s.store.GetRule(port)
-			}
-		}
-	}
-	if err := s.ipt.ApplyPortRule(*rule, clientIP(c)); err != nil {
+	ruleVal := s.persistCurrentIP(c, port, *rule)
+	if err := s.ipt.ApplyPortRule(ruleVal, clientIP(c)); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"code": 0, "msg": "保存成功但应用iptables失败: " + err.Error()})
 		return
 	}

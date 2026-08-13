@@ -434,7 +434,7 @@
         diskEl.className = 'server-val' + (disk.used_pct > 85 ? ' danger' : disk.used_pct > 70 ? ' warn' : '');
 
         var ports = (s.open_ports || []).map(function(p) {
-          return '<span class="port-tag">' + p + '</span>';
+          return '<span class="port-tag">' + esc(p) + '</span>';
         }).join('');
         setHTML('sv-ports', ports || '<span style="color:#9ca3af;">--</span>');
         setText('sv-tcp', (s.tcp_connections || 0) + ' 条');
@@ -448,7 +448,7 @@
           sel.value = currentVal; // 保持已选值（刷新不重置）
         }
 
-        var logins = (s.last_logins || []).slice(0, 3).join('<br>');
+        var logins = (s.last_logins || []).slice(0, 3).map(function(l) { return esc(l); }).join('<br>');
         setHTML('sv-login', logins ? '最近登录：<br>' + logins : '');
       }).catch(function() {});
     }
