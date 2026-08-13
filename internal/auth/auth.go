@@ -1,114 +1,116 @@
-// Package auth 提供管理后台的账号密码鉴权与会话管理。
+// Package auth 提供管理后台的 JWT 鉴权。
+// 无状态 JWT：token 自带用户信息 + 过期时间，服务重启不影响已登录用户，多实例共享（同一密钥）。
 package auth
 
 import (
-	"crypto/rand"
-	"crypto/sha256"
-	"encoding/hex"
-	"sync"
+	"fmt"
 	"time"
 
-	"golang.org/x/crypto/bcrypt"
+	"github.com/golang-jwt/jwt/v5"
 )
 
-// Auth 鉴权管理器，持有用户凭据和会话。
+// Auth JWT 鉴权管理器。
 type Auth struct {
-	mu          sync.RWMutex
-	username    string
-	passHash    []byte
-	sessions    map[string]time.Time // token -> 过期时间
-	sessionTTL  time.Duration
-	longSessionTTL time.Duration
+	secret         []byte
+	username       string
+	passHash       []byte
+	shortTTL       time.Duration // 默认会话时长
+	longTTL        time.Duration // "记住我"会话时长
+	persistPassword func(newPassword string) error
 }
 
-// New 创建鉴权管理器。password 为明文，内部 bcrypt 哈希存储。
-// longTTL 为"记住我"会话时长。
-func New(username, password string, sessionTTL, longTTL time.Duration) (*Auth, error) {
-	hash, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
+// New 创建鉴权管理器。secret 为 JWT 签名密钥。
+// password 为明文，内部 bcrypt 哈希存储。
+func New(username, password, secret string, sessionTTL, longTTL time.Duration) (*Auth, error) {
+	hash, err := hashPassword(password)
 	if err != nil {
 		return nil, err
 	}
+	if secret == "" {
+		return nil, fmt.Errorf("JWT secret 不能为空")
+	}
 	return &Auth{
-		username:       username,
-		passHash:       hash,
-		sessions:       make(map[string]time.Time),
-		sessionTTL:     sessionTTL,
-		longSessionTTL: longTTL,
+		secret:   []byte(secret),
+		username: username,
+		passHash: hash,
+		shortTTL: sessionTTL,
+		longTTL:  longTTL,
 	}, nil
 }
 
-// Login 校验用户名密码，成功返回 session token。remember=true 使用长会话。
+// SetPersistPassword 设置密码持久化回调，改密成功后写回配置文件。
+func (a *Auth) SetPersistPassword(fn func(newPassword string) error) {
+	a.persistPassword = fn
+}
+
+// Login 校验用户名密码，成功返回 JWT token。remember=true 使用长会话。
 func (a *Auth) Login(username, password string, remember bool) (string, error) {
 	if username != a.username {
 		return "", ErrUnauthorized
 	}
-	if bcrypt.CompareHashAndPassword(a.passHash, []byte(password)) != nil {
+	if !checkPassword(a.passHash, password) {
 		return "", ErrUnauthorized
 	}
-	token := randomToken()
-	ttl := a.sessionTTL
+	ttl := a.shortTTL
 	if remember {
-		ttl = a.longSessionTTL
+		ttl = a.longTTL
 	}
-	a.mu.Lock()
-	a.sessions[token] = time.Now().Add(ttl)
-	a.mu.Unlock()
-	return token, nil
+	return a.sign(ttl)
 }
 
-// ChangePassword 修改密码（旧密码校验）。
+// sign 签发 JWT。
+func (a *Auth) sign(ttl time.Duration) (string, error) {
+	now := time.Now()
+	claims := jwt.MapClaims{
+		"username": a.username,
+		"iat":      now.Unix(),
+		"exp":      now.Add(ttl).Unix(),
+	}
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+	return token.SignedString(a.secret)
+}
+
+// Verify 校验 JWT token 是否有效。返回 username。
+func (a *Auth) Verify(tokenStr string) (string, error) {
+	token, err := jwt.Parse(tokenStr, func(t *jwt.Token) (interface{}, error) {
+		if _, ok := t.Method.(*jwt.SigningMethodHMAC); !ok {
+			return nil, fmt.Errorf("unexpected signing method: %v", t.Header["alg"])
+		}
+		return a.secret, nil
+	})
+	if err != nil {
+		return "", err
+	}
+	if claims, ok := token.Claims.(jwt.MapClaims); ok && token.Valid {
+		if u, ok := claims["username"].(string); ok {
+			return u, nil
+		}
+		return "", fmt.Errorf("token 缺 username")
+	}
+	return "", fmt.Errorf("token 无效")
+}
+
+// ChangePassword 修改密码（旧密码校验）。改密后持久化到配置文件。
+// 先持久化成功再更新内存，避免写文件失败导致内存已改但重启后回退。
 func (a *Auth) ChangePassword(oldPass, newPass string) error {
-	if bcrypt.CompareHashAndPassword(a.passHash, []byte(oldPass)) != nil {
+	if !checkPassword(a.passHash, oldPass) {
 		return ErrUnauthorized
 	}
 	if len(newPass) < 6 {
 		return &AuthError{"新密码至少 6 位"}
 	}
-	hash, err := bcrypt.GenerateFromPassword([]byte(newPass), bcrypt.DefaultCost)
+	hash, err := hashPassword(newPass)
 	if err != nil {
 		return err
 	}
-	a.mu.Lock()
+	// 先持久化到配置文件（重启后不丢失）；失败则不更新内存，密码保持不变
+	if a.persistPassword != nil {
+		if err := a.persistPassword(newPass); err != nil {
+			return err
+		}
+	}
 	a.passHash = hash
-	// 修改密码后清除所有会话，强制重新登录
-	a.sessions = make(map[string]time.Time)
-	a.mu.Unlock()
 	return nil
-}
-
-// Verify 校验 session token 是否有效。
-func (a *Auth) Verify(token string) bool {
-	a.mu.Lock()
-	defer a.mu.Unlock()
-	exp, ok := a.sessions[token]
-	if !ok {
-		return false
-	}
-	if time.Now().After(exp) {
-		delete(a.sessions, token)
-		return false
-	}
-	return true
-}
-
-// Logout 注销 session。
-func (a *Auth) Logout(token string) {
-	a.mu.Lock()
-	defer a.mu.Unlock()
-	delete(a.sessions, token)
-}
-
-// randomToken 生成随机 session token。
-func randomToken() string {
-	b := make([]byte, 32)
-	_, _ = rand.Read(b)
-	return hex.EncodeToString(b)
-}
-
-// hashString 辅助：对任意字符串做 SHA256（用于配置值混淆，非登录凭据）。
-func hashString(s string) string {
-	h := sha256.Sum256([]byte(s))
-	return hex.EncodeToString(h[:])
 }
 
 // ErrUnauthorized 认证失败错误。

@@ -21,8 +21,9 @@
 |------|------|
 | 多端口白名单 | 每条规则 = {端口, IP/CIDR, 备注}，可管 SSH(22)、Redis(6379)、webhook(9000) 等任意端口 |
 | Web 管理页面 | 账号密码登录，查看/增删白名单，显示当前来源 IP |
-| 账号密码 | bcrypt 哈希存储，支持修改密码 |
-| 记住登录 | 登录勾选"记住我"保持 30 天，刷新不掉线 |
+| 账号密码 | bcrypt 哈希存储 + JWT 无状态鉴权，支持修改密码 |
+| 记住登录 | 登录勾选"记住我"保持 30 天（可配 `remember_days`），刷新不掉线 |
+| 服务器概览 | 页面实时显示 CPU/内存/磁盘/负载/uptime/监听端口/最近登录等运维信息 |
 | 移动端适配 | 响应式布局，手机浏览器可用 |
 | 严格模式 | 每端口可选"仅白名单可连"，非白名单 DROP；宽松模式只展示不阻断 |
 | 防锁死 | 自动加入当前来源 IP、禁止删当前 IP、严格模式禁止删到空、先 ACCEPT 后 DROP |
@@ -37,9 +38,11 @@
 ```
 ┌─────────────────────────────────────────────┐
 │  ip-allowlist (宿主机, systemd 自启, root)    │
-│  ├─ Web 页面 (登录 + 白名单管理)              │
-│  ├─ API (login/rules/rule/ip/strict/sync)    │
+│  ├─ Web 页面 (登录 + 白名单管理 + 服务器概览) │
+│  ├─ API (login/rules/rule/ip/strict/sync/   │
+│  │        me/change-password/server-info)    │
 │  ├─ iptables 管理器 (规则重建, 防锁死)        │
+│  ├─ sysinfo 采集 (CPU/内存/磁盘/负载/登录)    │
 │  └─ 持久化 (JSON 文件)                       │
 └──────────────────────┬──────────────────────┘
                        │ 直接操作 iptables
@@ -135,7 +138,7 @@ systemctl restart ip-allowlist
 
 ### 严格模式安全设计
 
-- **自动加当前 IP**：启用严格模式时，若你的来源 IP 不在白名单，自动补入。
+- **自动加当前 IP**：启用严格模式时，若你的来源 IP 不在白名单，自动补入并持久化（重启不丢）。
 - **禁止删当前 IP**：严格模式下删除当前来源 IP 会被拒绝。
 - **禁止删到空**：严格模式下删到白名单为空会回滚，提示保留至少一条。
 - **先 ACCEPT 后 DROP**：规则顺序保证白名单放行优先于兜底拒绝。
@@ -154,7 +157,7 @@ systemctl restart ip-allowlist
 
 ## API 参考
 
-所有接口需登录后携带 `X-Auth-Token` header（登录返回的 token）。
+所有接口需登录后携带 JWT：浏览器自动走 HttpOnly Cookie，API 调用可用 `X-Auth-Token` header 或 `?token=` 查询参数。
 
 | 方法 | 路径 | 说明 |
 |------|------|------|
@@ -165,9 +168,11 @@ systemctl restart ip-allowlist
 | POST | `/api/rule/:port/ip` | 添加白名单 IP，body `{ip, remark}` |
 | DELETE | `/api/rule/:port/ip/:ip` | 删除白名单 IP |
 | POST | `/api/rule/:port/strict` | 切换严格模式，body `{strict}` |
+| GET  | `/api/me` | 当前登录信息（用户名 + 来源 IP） |
 | POST | `/api/change-password` | 修改密码，body `{old_password, new_password}` |
-| POST | `/api/logout` | 退出登录 |
+| POST | `/api/logout` | 退出登录（清除 Cookie） |
 | GET  | `/api/sync` | 手动同步 iptables 与配置 |
+| GET  | `/api/server-info` | 服务器运维信息（CPU/内存/磁盘/负载/端口/最近登录） |
 
 ---
 
@@ -182,7 +187,9 @@ server:
 auth:
   username: "admin"                      # 管理账号
   password: "你的密码"                   # 管理密码
-  session_hours: 24                      # 会话时长
+  secret: "随机长字符串"                  # JWT 签名密钥（务必改为随机长字符串）
+  session_hours: 24                      # 会话时长（小时）
+  remember_days: 30                      # "记住我"会话时长（天）
 ```
 
 白名单数据文件 `allowlist.json`（示例）：
@@ -253,8 +260,9 @@ ip-allowlist/
 ├── config.example.yaml     # 配置示例
 ├── internal/
 │   ├── api/                # HTTP API + Web
-│   ├── auth/               # 账号密码 + session
+│   ├── auth/               # 账号密码 + JWT 鉴权
 │   ├── iptables/           # 规则生成/应用/防锁死
+│   ├── sysinfo/            # 服务器运维信息采集
 │   └── store/              # JSON 持久化
 ├── web/                    # 前端页面
 ├── deploy.sh               # 一键部署入口（curl 远程/本地都支持）
@@ -284,15 +292,17 @@ ip-allowlist/
 │   ├── config.go     YAML 配置加载                  │
 │   ├── internal/api       HTTP 层 (gin)            │
 │   │    ├── 路由注册                                │
-│   │    ├── 鉴权中间件 (session token)             │
+│   │    ├── 鉴权中间件 (JWT)                       │
 │   │    └── handler (rules/ip/strict/... )         │
 │   ├── internal/auth      鉴权                     │
 │   │    ├── bcrypt 密码哈希                         │
-│   │    └── 内存 session 管理                       │
+│   │    └── JWT 签发/校验 (无状态)                  │
 │   ├── internal/iptables  防火墙核心               │
 │   │    ├── 规则生成 (每端口独立链)                │
 │   │    ├── 规则应用 (重建, 防锁死)                │
 │   │    └── dry-run 模式                           │
+│   ├── internal/sysinfo   运维信息采集             │
+│   │    └── 读 /proc + ss/df/last，零外部依赖      │
 │   └── internal/store     持久化                   │
 │        ├── JSON 文件读写                          │
 │        └── 并发安全 (读写锁)                      │
@@ -323,6 +333,7 @@ ip-allowlist/
 | Web 框架 | gin | 轻量、性能好、社区成熟 |
 | 前端 | 原生 HTML/JS | 单文件内嵌，无构建步骤，移动端适配 |
 | 密码哈希 | bcrypt | 抗暴力破解，业界标准 |
+| 鉴权 | JWT (golang-jwt) | 无状态，服务重启不掉登录，多实例可共享同一密钥 |
 | 持久化 | JSON 文件 | 简单可靠，无外部依赖，适合配置型数据 |
 | 防火墙 | iptables | Linux 标配，规则细粒度，fail2ban 兼容 |
 

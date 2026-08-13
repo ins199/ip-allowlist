@@ -34,6 +34,9 @@ func main() {
 	if err != nil {
 		log.Fatalf("加载配置失败: %v", err)
 	}
+	if cfg.Auth.Secret == "change-me-secret" {
+		log.Println("警告: JWT secret 仍为默认值，请务必在 config.yaml 中改为随机长字符串")
+	}
 	// flag 显式传入时优先于配置文件
 	if *bindAddr == "" && cfg.Server.Addr != "" {
 		*bindAddr = cfg.Server.Addr
@@ -55,15 +58,32 @@ func main() {
 	}
 
 	// 鉴权
-	a, err := auth.New(cfg.Auth.Username, cfg.Auth.Password,
+	a, err := auth.New(cfg.Auth.Username, cfg.Auth.Password, cfg.Auth.Secret,
 		time.Duration(cfg.Auth.SessionHours)*time.Hour,
 		time.Duration(cfg.Auth.RememberDays)*24*time.Hour)
 	if err != nil {
 		log.Fatalf("初始化鉴权失败: %v", err)
 	}
+	// 修改密码后写回 config.yaml（重启不丢失）
+	a.SetPersistPassword(func(newPassword string) error {
+		cfg.Auth.Password = newPassword
+		return saveConfig(*configPath, cfg)
+	})
 
 	// iptables
 	ipt := iptables.New()
+
+	// 首次启动：若无任何规则，自动创建 SSH(22) 默认规则（宽松模式）
+	if len(st.GetRules()) == 0 {
+		log.Println("首次启动：创建默认 SSH(22) 规则（宽松模式）")
+		if err := st.UpsertRule(store.PortRule{
+			Port:    22,
+			Comment: "SSH",
+			Strict:  false,
+		}); err != nil {
+			log.Printf("创建默认规则失败: %v", err)
+		}
+	}
 
 	// 启动时同步一次（开机恢复规则）
 	if !iptables.DryRun() {

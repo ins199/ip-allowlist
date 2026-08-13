@@ -5,4 +5,6 @@ server:
 auth:
   username: "admin"              # 管理账号
   password: "changeme"           # 管理密码（部署后立即修改）
+  secret: "change-me-secret"     # JWT签名密钥（务必改为随机长字符串）
   session_hours: 24              # 会话有效期（小时）
+  remember_days: 30              # "记住我"会话时长（天）

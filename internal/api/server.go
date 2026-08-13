@@ -12,6 +12,7 @@ import (
 	"ip-allowlist/internal/auth"
 	"ip-allowlist/internal/iptables"
 	"ip-allowlist/internal/store"
+	"ip-allowlist/internal/sysinfo"
 )
 
 // Server HTTP 服务。
@@ -20,7 +21,6 @@ type Server struct {
 	store  *store.Store
 	ipt    *iptables.Executor
 	auth   *auth.Auth
-	// adminToken 静态管理 token（页面加载后由用户登录换取 session，此 token 供健康检查等只读场景）
 }
 
 // New 创建 HTTP 服务并注册路由。
@@ -52,6 +52,7 @@ func New(st *store.Store, ipt *iptables.Executor, a *auth.Auth) *Server {
 		authGroup.POST("/logout", s.handleLogout)
 		authGroup.GET("/sync", s.handleSync)
 		authGroup.POST("/change-password", s.handleChangePassword)
+		authGroup.GET("/server-info", s.handleServerInfo)
 	}
 
 	s.router = r
@@ -66,21 +67,48 @@ func (s *Server) Run(addr string) error {
 	return s.router.Run(addr)
 }
 
-// authMiddleware 校验登录 session。
+// authMiddleware 校验 JWT（从 HttpOnly Cookie 或 header 读取）。
 func (s *Server) authMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
-		token := c.GetHeader("X-Auth-Token")
-		if token == "" {
-			token = c.Query("token")
-		}
-		if token == "" || !s.auth.Verify(token) {
+		token := s.tokenFromRequest(c)
+		username, err := s.auth.Verify(token)
+		if err != nil {
 			c.JSON(http.StatusUnauthorized, gin.H{"code": 0, "msg": "未登录或会话过期"})
 			c.Abort()
 			return
 		}
 		c.Set("token", token)
+		c.Set("username", username)
 		c.Next()
 	}
+}
+
+// tokenFromRequest 从 Cookie 或 header 提取 JWT。
+func (s *Server) tokenFromRequest(c *gin.Context) string {
+	if token, err := c.Cookie("ipaw_token"); err == nil && token != "" {
+		return token
+	}
+	if token := c.GetHeader("X-Auth-Token"); token != "" {
+		return token
+	}
+	return c.Query("token")
+}
+
+// setTokenCookie 写入 HttpOnly Cookie。
+func (s *Server) setTokenCookie(c *gin.Context, token string, remember bool) {
+	// 短会话 24h，长会话 30 天
+	maxAge := 24 * 3600
+	if remember {
+		maxAge = 30 * 24 * 3600
+	}
+	c.SetSameSite(http.SameSiteLaxMode)
+	c.SetCookie("ipaw_token", token, maxAge, "/", "", true, true) // Secure + HttpOnly
+}
+
+// clearTokenCookie 清除 token Cookie。
+func (s *Server) clearTokenCookie(c *gin.Context) {
+	c.SetSameSite(http.SameSiteLaxMode)
+	c.SetCookie("ipaw_token", "", -1, "/", "", true, true)
 }
 
 // clientIP 获取客户端真实 IP（含 X-Forwarded-For）。
@@ -118,6 +146,8 @@ func (s *Server) handleLogin(c *gin.Context) {
 		c.JSON(http.StatusUnauthorized, gin.H{"code": 0, "msg": err.Error()})
 		return
 	}
+	// 签发 JWT 写入 HttpOnly Cookie（防 XSS 偷 token）
+	s.setTokenCookie(c, token, req.Remember)
 	c.JSON(http.StatusOK, gin.H{"code": 1, "data": gin.H{"token": token}})
 }
 
@@ -140,10 +170,8 @@ func (s *Server) handleChangePassword(c *gin.Context) {
 }
 
 func (s *Server) handleLogout(c *gin.Context) {
-	token, _ := c.Get("token")
-	if t, ok := token.(string); ok {
-		s.auth.Logout(t)
-	}
+	// JWT 无状态，注销即清除 Cookie
+	s.clearTokenCookie(c)
 	c.JSON(http.StatusOK, gin.H{"code": 1, "msg": "已退出"})
 }
 
@@ -182,7 +210,7 @@ type ResForMe struct {
 
 func (s *Server) handleMe(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"code": 1, "data": ResForMe{
-		Username:  "admin",
+		Username:  c.GetString("username"),
 		CurrentIP: clientIP(c),
 	}})
 }
@@ -225,8 +253,11 @@ func (s *Server) handleDeleteRule(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"code": 0, "msg": err.Error()})
 		return
 	}
-	// 清理 iptables（重建空链 + 移除引用）
-	_ = s.ipt.ApplyPortRule(store.PortRule{Port: port, Strict: false}, clientIP(c))
+	// 清理 iptables（重建空链 + 移除引用），失败需告知避免配置与规则不一致
+	if err := s.ipt.ApplyPortRule(store.PortRule{Port: port, Strict: false}, clientIP(c)); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"code": 0, "msg": "规则已删除但清理iptables失败: " + err.Error()})
+		return
+	}
 	c.JSON(http.StatusOK, gin.H{"code": 1, "msg": "规则已删除"})
 }
 
@@ -370,4 +401,10 @@ func (s *Server) handleSync(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"code": 1, "msg": "同步完成"})
+}
+
+// handleServerInfo 返回服务器基础运维信息。
+func (s *Server) handleServerInfo(c *gin.Context) {
+	info := sysinfo.Collect()
+	c.JSON(http.StatusOK, gin.H{"code": 1, "data": info})
 }
