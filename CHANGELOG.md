@@ -2,6 +2,10 @@
 
 所有重要变更记录在此。版本格式遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## v1.0.18 (2026-08-14)
+
+- chore: 版本号更新（10s fallback 真机验证：GitHub 10s 超时 → 自动切 OSS 镜像，升级成功）
+
 ## v1.0.17 (2026-08-14)
 
 - perf: 自升级 GitHub 源超时 30s→10s，国内 GitHub 被阻断时更快 fallback 镜像
