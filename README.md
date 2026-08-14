@@ -1,5 +1,7 @@
 # ip-allowlist — 通用 IP 白名单管理系统
 
+**Languages**: [English](README.en.md) | [中文](README.md)
+
 > 部署到任意 Linux 宿主机即用，通过 Web 页面管理 **多个端口** 的 IP 白名单（iptables）。
 > 解决"防止外部 IP 拿到密钥连接服务器/数据库"，同时 IP 漂移时可以在网页上自助增删，不用上云控制台。
 
