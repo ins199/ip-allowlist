@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"runtime"
 	"strconv"
 	"strings"
@@ -290,8 +291,14 @@ func (s *Server) runUpgrade() error {
 		url = strings.TrimRight(mirror, "/") + "/" + asset
 	}
 
+	binPath, err := os.Executable()
+	if err != nil {
+		return fmt.Errorf("定位当前二进制失败: %w", err)
+	}
+
 	s.setUpgradeProgress("downloading", 0, "正在下载新版本...")
-	tmp, err := s.downloadToTemp(url)
+	// 临时文件与目标二进制放同一目录（同一文件系统），保证 rename 原子替换不跨设备（/tmp 常为独立挂载点）
+	tmp, err := s.downloadToTemp(url, filepath.Dir(binPath))
 	if err != nil {
 		return fmt.Errorf("下载失败: %w", err)
 	}
@@ -304,10 +311,6 @@ func (s *Server) runUpgrade() error {
 	}
 
 	s.setUpgradeProgress("replacing", 95, "备份并替换二进制")
-	binPath, err := os.Executable()
-	if err != nil {
-		return fmt.Errorf("定位当前二进制失败: %w", err)
-	}
 	bak := binPath + ".bak"
 	_ = os.Remove(bak)
 	if err := os.Rename(binPath, bak); err != nil {
@@ -411,8 +414,8 @@ func (pr *progressReader) Read(p []byte) (int, error) {
 	return n, err
 }
 
-// downloadToTemp 下载文件到临时路径，上报下载进度，校验非空且大于 1MB。
-func (s *Server) downloadToTemp(url string) (string, error) {
+// downloadToTemp 下载文件到 dir 目录下的临时路径，上报下载进度，校验非空且大于 1MB。
+func (s *Server) downloadToTemp(url, dir string) (string, error) {
 	client := &http.Client{Timeout: 120 * time.Second}
 	resp, err := client.Get(url)
 	if err != nil {
@@ -422,7 +425,7 @@ func (s *Server) downloadToTemp(url string) (string, error) {
 	if resp.StatusCode != http.StatusOK {
 		return "", fmt.Errorf("HTTP %d", resp.StatusCode)
 	}
-	tmp := fmt.Sprintf("/tmp/ip-allowlist.upgrade.%d", os.Getpid())
+	tmp := filepath.Join(dir, fmt.Sprintf(".ipaw-upgrade-%d", os.Getpid()))
 	f, err := os.Create(tmp)
 	if err != nil {
 		return "", err
