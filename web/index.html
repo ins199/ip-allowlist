@@ -458,7 +458,10 @@
         setText('sv-version', u.current || '--');
         var info = document.getElementById('update-info');
         var btn = document.getElementById('upgrade-btn');
-        if (u.has_update) {
+        if (u.check_error) {
+          info.textContent = '检查更新失败（网络受限），版本号为本地值';
+          btn.style.display = 'none';
+        } else if (u.has_update) {
           info.textContent = '发现新版本 ' + u.latest;
           btn.style.display = 'inline-block';
         } else {

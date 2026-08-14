@@ -218,16 +218,18 @@ func (s *Server) handleLoginLogs(c *gin.Context) {
 // ===== 自升级 =====
 
 // handleUpgradeCheck 检查是否有新版本（对比 GitHub 最新 release）。
+// 本地版本始终返回（不依赖网络），GitHub 查询失败时仅带 check_error，不影响版本号展示。
 func (s *Server) handleUpgradeCheck(c *gin.Context) {
 	latest, err := fetchLatestVersion()
+	checkErr := ""
 	if err != nil {
-		c.JSON(http.StatusBadGateway, gin.H{"code": 0, "msg": "检查更新失败: " + err.Error()})
-		return
+		checkErr = err.Error()
 	}
 	c.JSON(http.StatusOK, gin.H{"code": 1, "data": gin.H{
 		"current":    s.version,
 		"latest":     latest,
-		"has_update": versionNewer(latest, s.version),
+		"has_update": latest != "" && versionNewer(latest, s.version),
+		"check_error": checkErr,
 	}})
 }
 
