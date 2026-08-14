@@ -4,6 +4,7 @@ package store
 import (
 	"encoding/json"
 	"fmt"
+	"log"
 	"os"
 	"path/filepath"
 	"sync"
@@ -67,7 +68,14 @@ func (s *Store) load() error {
 		return fmt.Errorf("读取配置失败: %w", err)
 	}
 	if err := json.Unmarshal(data, &s.cfg); err != nil {
-		return fmt.Errorf("解析配置失败: %w", err)
+		// 数据损坏：尝试从 .bak 恢复上一次成功版本
+		if bakData, bakErr := os.ReadFile(s.path + ".bak"); bakErr == nil {
+			if bakErr := json.Unmarshal(bakData, &s.cfg); bakErr == nil {
+				log.Printf("allowlist.json 损坏，已从 .bak 恢复")
+				return s.Save()
+			}
+		}
+		return fmt.Errorf("解析配置失败且备份不可用: %w", err)
 	}
 	return nil
 }
@@ -87,7 +95,16 @@ func (s *Store) saveLocked() error {
 	if err != nil {
 		return err
 	}
-	return os.WriteFile(s.path, data, 0644)
+	// 保留当前文件为 .bak（上一次成功版本，供数据损坏时恢复）
+	if _, err := os.Stat(s.path); err == nil {
+		_ = os.Rename(s.path, s.path+".bak")
+	}
+	// 原子写：先写临时文件再 rename，避免写一半崩溃损坏数据
+	tmp := s.path + ".tmp"
+	if err := os.WriteFile(tmp, data, 0644); err != nil {
+		return err
+	}
+	return os.Rename(tmp, s.path)
 }
 
 // GetRules 返回当前所有规则（副本）。

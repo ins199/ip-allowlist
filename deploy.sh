@@ -109,6 +109,8 @@ fi
 chmod +x "$BIN"
 
 echo "==> 生成配置"
+# 随机 JWT secret：默认自动生成（openssl 或 /dev/urandom），可用 IPAW_JWT_SECRET 指定
+JWT_SECRET="${IPAW_JWT_SECRET:-$(openssl rand -hex 32 2>/dev/null || head -c 64 /dev/urandom | od -An -tx1 | tr -d ' \n')}"
 cat > "$INSTALL_DIR/config.yaml" <<EOF
 server:
   addr: "0.0.0.0:${WEB_PORT}"
@@ -116,6 +118,7 @@ server:
 auth:
   username: "admin"
   password: "${ADMIN_PASS}"
+  secret: "${JWT_SECRET}"
   session_hours: 24
   remember_days: 30
 EOF

@@ -39,7 +39,7 @@ func main() {
 		log.Fatalf("加载配置失败: %v", err)
 	}
 	if cfg.Auth.Secret == "change-me-secret" {
-		log.Println("警告: JWT secret 仍为默认值，请务必在 config.yaml 中改为随机长字符串")
+		log.Fatalf("JWT secret 为默认值，拒绝启动：请设置随机 secret（deploy.sh 会自动生成）")
 	}
 	// flag 显式传入时优先于配置文件
 	if *bindAddr == "" && cfg.Server.Addr != "" {

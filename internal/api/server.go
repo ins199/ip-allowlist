@@ -2,6 +2,8 @@
 package api
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -10,6 +12,7 @@ import (
 	"net/http"
 	"os"
 	"os/exec"
+	"path"
 	"path/filepath"
 	"runtime"
 	"strconv"
@@ -299,12 +302,17 @@ func (s *Server) runUpgrade() error {
 
 	s.setUpgradeProgress("downloading", 0, "正在下载新版本...")
 	// 临时文件与目标二进制放同一目录（同一文件系统），保证 rename 原子替换不跨设备（/tmp 常为独立挂载点）
-	tmp, err := s.downloadToTemp(urls, filepath.Dir(binPath))
+	tmp, srcURL, err := s.downloadToTemp(urls, filepath.Dir(binPath))
 	if err != nil {
 		return fmt.Errorf("下载失败: %w", err)
 	}
 	defer os.Remove(tmp)
 
+	// SHA256 校验（与下载源同源拉 SHA256SUMS，防镜像投毒；不执行不可信代码）
+	s.setUpgradeProgress("verifying", 85, "校验二进制（SHA256）")
+	if err := s.verifyChecksum(srcURL, asset, tmp); err != nil {
+		return fmt.Errorf("校验失败: %w", err)
+	}
 	s.setUpgradeProgress("verifying", 90, "校验二进制")
 	out, err := exec.Command(tmp, "-version").Output()
 	if err != nil || !strings.Contains(string(out), "ip-allowlist") {
@@ -415,20 +423,65 @@ func (pr *progressReader) Read(p []byte) (int, error) {
 	return n, err
 }
 
-// downloadToTemp 依次尝试多个下载源（默认 GitHub 官方，fallback 镜像），成功即返回；全部失败返回最后错误。
+// downloadToTemp 依次尝试多个下载源（默认 GitHub 官方，fallback 镜像），成功即返回（含成功源 URL）；全部失败返回最后错误。
 // 每个源短超时（10s）：正常网络下 10s 足够下载 10MB，国内 GitHub 被阻断时快速 fallback 镜像。
-func (s *Server) downloadToTemp(urls []string, dir string) (string, error) {
+func (s *Server) downloadToTemp(urls []string, dir string) (string, string, error) {
 	client := &http.Client{Timeout: 10 * time.Second}
 	var lastErr error
 	for _, url := range urls {
 		tmp, err := s.downloadOne(client, url, dir)
 		if err == nil {
-			return tmp, nil
+			return tmp, url, nil
 		}
 		lastErr = err
 		log.Printf("自升级从 %s 下载失败，尝试下一个源: %v", url, err)
 	}
-	return "", lastErr
+	return "", "", lastErr
+}
+
+// verifyChecksum 从与下载源同目录拉取 SHA256SUMS，校验下载文件的完整性（防镜像投毒）。
+func (s *Server) verifyChecksum(srcURL, asset, file string) error {
+	base := strings.TrimSuffix(srcURL, path.Base(srcURL))
+	client := &http.Client{Timeout: 10 * time.Second}
+	resp, err := client.Get(base + "SHA256SUMS")
+	if err != nil {
+		return fmt.Errorf("获取校验和失败: %w", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("校验和文件 HTTP %d", resp.StatusCode)
+	}
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return err
+	}
+	expected := ""
+	for _, line := range strings.Split(string(body), "\n") {
+		fields := strings.Fields(line)
+		if len(fields) >= 2 && fields[1] == asset {
+			expected = fields[0]
+			break
+		}
+	}
+	if expected == "" {
+		return fmt.Errorf("校验和文件缺少 %s", asset)
+	}
+	f, err := os.Open(file)
+	if err != nil {
+		return err
+	}
+	h := sha256.New()
+	if _, err := io.Copy(h, f); err != nil {
+		f.Close()
+		return err
+	}
+	f.Close()
+	actual := hex.EncodeToString(h.Sum(nil))
+	if !strings.EqualFold(actual, expected) {
+		return fmt.Errorf("SHA256 校验失败（期望 %s，实际 %s）", expected, actual)
+	}
+	log.Printf("自升级 SHA256 校验通过: %s", asset)
+	return nil
 }
 
 // downloadOne 从单个 URL 下载到 dir 目录下的临时路径，上报进度，校验非空且大于 1MB。
