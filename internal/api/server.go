@@ -224,7 +224,13 @@ func (s *Server) handleUpgrade(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"code": 0, "msg": "不支持的架构: " + runtime.GOARCH})
 		return
 	}
-	url := fmt.Sprintf("https://github.com/ins199/ip-allowlist/releases/latest/download/ip-allowlist-linux-%s", arch)
+	asset := fmt.Sprintf("ip-allowlist-linux-%s", arch)
+	url := fmt.Sprintf("https://github.com/ins199/ip-allowlist/releases/latest/download/%s", asset)
+	// IPAW_MIRROR 环境变量可指定国内可达的镜像前缀（如 https://mirror.example.com/），
+	// 阿里云等国内服务器访问 GitHub release 资产常被限速/阻断。
+	if mirror := os.Getenv("IPAW_MIRROR"); mirror != "" {
+		url = strings.TrimRight(mirror, "/") + "/" + asset
+	}
 	tmp, err := downloadToTemp(url)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"code": 0, "msg": "下载失败: " + err.Error()})
