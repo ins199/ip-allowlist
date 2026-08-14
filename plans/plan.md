@@ -110,3 +110,4 @@
 | 2026-08-14 | 自升级下载源策略：**默认 GitHub，失败自动 fallback IPAW_MIRROR 镜像**（每源超时 30s→10s）。真机验证：GitHub 超时→OSS 接管升级 v1.0.15→v1.0.16；OSS 下载 0.28s（阿里云互访）|
 | 2026-08-14 | 10s fallback 真机验证完成（v1.0.18）：日志确认 GitHub 恰好 10s 超时→自动切 OSS→升级成功，优化生效 |
 | 2026-08-14 | 版本号自动生成（v1.0.19）：main.go 默认 `dev`，CI/deploy.sh 用 `-ldflags -X main.Version=<tag>` 注入，发版不再手改版本号。验证：OSS 二进制 -version 正确显示 v1.0.19 |
+| 2026-08-14 | 从 内部项目 适配 6 个核心开发流程 skill 到本仓库（sync/feature/bugfix/hotfix/refactor/test）：保留方法论骨架，替换为 ip-allowlist 技术栈（gin 分层/防锁死/dry-run/systemctl），已脱敏内部信息 |
