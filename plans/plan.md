@@ -56,6 +56,7 @@
 - [x] 生产部署验证（测试服务器 真机从 0 部署 + 自升级全链路）
 - [x] 迁移到 GitHub（含 Actions 发版 CI）
 - [ ] **中台形态演进**（远期）：几十台内单机够用；后续可拆"中台管理端 + 每服务器轻量 Agent"，iptables 核心逻辑直接复用
+- [ ] **iptables 重建改原子 swap**（I3）：当前"删 INPUT 引用→删链→重建"窗口期端口无防护（毫秒级，风险低）。改"建新链→切换引用→删旧链"消除窗口，但需改链命名约定，复杂度高，暂缓 |
 
 ## 架构演进（重要决策）
 
@@ -120,3 +121,4 @@
 | 2026-08-14 | fix（v1.0.20）：cookie 自动登录时初始加载不显示版本号/登录记录——初始加载补 loadLoginLogs+loadUpgradeInfo（用户刷新 生产服务器 页面触发） |
 | 2026-08-14 | 安全优化（v1.0.21）：① deploy.sh 生成随机 JWT secret + main.go 拒绝默认 secret（防伪造 token）② store 原子写（tmp+rename）+ 损坏自 .bak 恢复（防崩溃损坏）③ 自升级 SHA256 校验和（release.yml 发 SHA256SUMS，升级拉同源校验，防镜像投毒）|
 | 2026-08-14 | 安全：清除 plan.md 内部信息泄露（内部项目名/服务器域名/IP，filter-repo 重写历史 + force push + 重打 tags）；新增 leak-check CI（push/PR 扫描敏感词，命中失败，已验证通过）|
+| 2026-08-14 | 优化（v1.0.22）：I2 升级失败自动回滚（升级写 .ipaw-upgrade-pending 标记，新版本初始化失败自动 .bak 恢复+重启）；I4 clientIP 仅信任可信反代 header（防伪造 X-Forwarded-For 破坏防锁死）|

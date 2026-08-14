@@ -160,20 +160,34 @@ func (s *Server) clearTokenCookie(c *gin.Context) {
 	c.SetCookie("ipaw_token", "", -1, "/", "", secureCookie(c), true)
 }
 
-// clientIP 获取客户端真实 IP（含 X-Forwarded-For）。
+// clientIP 获取客户端真实 IP：仅当 TCP 对端是可信代理（本机 nginx 反代 127.0.0.1）时才采用
+// X-Real-IP / X-Forwarded-For，否则用 TCP 对端——防止攻击者伪造 header 破坏防锁死语义。
 func clientIP(c *gin.Context) string {
-	ip := c.ClientIP()
-	// 从 X-Real-IP / X-Forwarded-For 取真实来源
-	if rip := c.GetHeader("X-Real-IP"); rip != "" {
-		ip = rip
-	} else if fwd := c.GetHeader("X-Forwarded-For"); fwd != "" {
-		parts := strings.Split(fwd, ",")
-		ip = strings.TrimSpace(parts[0])
+	remote := c.ClientIP()
+	if rip := c.GetHeader("X-Real-IP"); rip != "" && isTrustedProxy(remote) {
+		return cutPort(rip)
 	}
+	if fwd := c.GetHeader("X-Forwarded-For"); fwd != "" && isTrustedProxy(remote) {
+		return cutPort(strings.TrimSpace(strings.Split(fwd, ",")[0]))
+	}
+	return cutPort(remote)
+}
+
+// cutPort 去掉 IPv4/IPv6 的端口部分（"1.2.3.4:5678" → "1.2.3.4"）。
+func cutPort(ip string) string {
 	if idx := strings.Index(ip, ":"); idx >= 0 {
-		ip = ip[:idx]
+		return ip[:idx]
 	}
 	return ip
+}
+
+// isTrustedProxy 判断 TCP 对端是否可信反代（本机 nginx 反代场景为 127.0.0.1）。
+func isTrustedProxy(ip string) bool {
+	switch ip {
+	case "127.0.0.1", "::1", "localhost":
+		return true
+	}
+	return false
 }
 
 // ===== Handler =====
@@ -330,6 +344,10 @@ func (s *Server) runUpgrade() error {
 		return fmt.Errorf("替换二进制失败: %w", err)
 	}
 	_ = os.Chmod(binPath, 0755)
+	// 写自升级标记：新版本启动成功会清除；若新版本初始化失败，main 检测到标记自动用 .bak 回滚
+	if err := os.WriteFile(binPath+".ipaw-upgrade-pending", []byte("1"), 0644); err != nil {
+		log.Printf("写自升级标记失败: %v", err)
+	}
 
 	s.setUpgradeProgress("restarting", 98, "重启服务")
 	go func() {
