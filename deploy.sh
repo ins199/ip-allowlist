@@ -77,6 +77,7 @@ resolve_src() {
 # 编译或使用预编译二进制
 INSTALL_DIR=/opt/ip-allowlist
 BIN="$INSTALL_DIR/ip-allowlist"
+mkdir -p "$INSTALL_DIR"
 
 echo "==> 准备二进制"
 ARCH="$(detect_arch)" || exit 1
