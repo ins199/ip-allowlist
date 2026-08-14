@@ -128,3 +128,4 @@
 | 2026-08-14 | test: 单元测试——store（增删/去重/持久化/原子写/损坏恢复/登录记录上限）、iptables（dry-run 防锁死/空白拒绝/自动补IP）、auth（登录/校验/改密/过期token），全部通过 |
 | 2026-08-14 | 安全：全面泄露复查发现并修复 commit message 里的服务器代号（filter-repo --replace-message 补漏）——工作区/历史文件内容/commit messages 均已确认无内部信息 |
 | 2026-08-14 | 安全双保险：gitleaks 密钥格式扫描（CI gitleaks-action + 本地 pre-commit hook）+ 现有 leak-check 内部敏感词（GitHub Secret）。修复 plan.md 记录修复时误写敏感词 |
+| 2026-08-14 | ygg 同步升级 v1.0.0：旧版(config 无 secret)升级后 C2 拒绝默认 secret 致启动失败循环重启，手动补随机 secret 恢复。⚠️ 升级兼容：老部署(config 无 secret)升级到 v1.0.0 需设 secret，旧版升级不写 I2 标记故不自动回滚 |

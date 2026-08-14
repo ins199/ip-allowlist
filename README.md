@@ -160,6 +160,8 @@ sudo IPAW_VERSION=v1.0.1 bash -c "$(curl -fsSL https://raw.githubusercontent.com
 1. **部署脚本升级**：重新执行一键部署脚本覆盖安装（配置与白名单数据保留在 `/opt/ip-allowlist/`）
 2. **页面自升级**：管理页显示当前版本 → 检查更新 → 一键升级。下载后经 **SHA256 校验**（防投毒），替换二进制并自动重启；升级失败自动回滚上一版本
 
+> ⚠️ **旧版升级兼容**：若旧 config.yaml 无 `secret` 字段（早期 deploy.sh 生成），升级到 v1.0.0 会被"拒绝默认 JWT secret"拦截导致启动失败。需手动在 config.yaml 添加随机 `secret`（或重新部署，新部署会自动生成）：`openssl rand -hex 32`
+
 ### 国内镜像源（可选）
 
 国内服务器（如阿里云）访问 GitHub release 资产常被限速/阻断。可通过 `IPAW_MIRROR` 环境变量指定可达的镜像前缀（如阿里云 OSS 公共读桶）：
