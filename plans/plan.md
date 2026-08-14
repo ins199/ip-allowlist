@@ -29,15 +29,21 @@
 - [x] 移动端适配（响应式布局）
 - [x] deploy.sh 一键部署（curl 远程/本地）+ systemd 单元
 - [x] README 完整文档
+- [x] 登录记录：成功/失败登录时间+来源 IP，`/api/login-logs`，页面独立区块（保留最近 50 条）
+- [x] 页面自升级：版本号显示+检查更新+一键升级（进度条/自动刷新/备份回滚），`/api/upgrade/check|upgrade|status`
+- [x] 国内镜像源：阿里云 OSS 公共读桶 + CI 自动同步 + 默认 GitHub→镜像 fallback（IPAW_MIRROR）
+- [x] 版本号自动生成：CI/deploy.sh 用 ldflags 从 git tag 注入，发版只打 tag
+- [x] 安全：plans/plan.md 与 git 历史脱敏（filter-repo 重写）
 
 ## 测试清单
 
-- [ ] 本地编译 go build ./... 通过
-- [ ] dry-run 模式启动 + curl 登录测试
-- [ ] iptables 规则生成验证（dry-run 打印正确）
-- [ ] 防锁死异常用例（删当前 IP / 删到空）
-- [ ] 真机部署到服务器验证规则生效
-- [ ] 重启恢复验证
+- [x] 本地编译 go build ./... 通过
+- [x] dry-run 模式启动 + curl 登录测试
+- [x] iptables 规则生成验证（dry-run 打印正确）
+- [x] 防锁死异常用例（删当前 IP / 删到空 / 严格模式空白名单）
+- [x] 真机部署到服务器验证（测试服务器 从 0 部署 + 自升级全链路）
+- [x] 重启恢复验证
+- [ ] 单元测试（iptables 规则生成、store 增删、auth 密码）
 
 ## 待办
 
@@ -46,10 +52,9 @@
   - [x] `deploy.sh`：无 Go 时按 `uname -m` 从 Release 下载预编译二进制（支持 `IPAW_VERSION` 指定版本）
   - [x] README 快速部署章节：明示无需装 Go/Docker/任何工具链，只需 Linux 标配 iptables；补"发版"说明
   - 边界：不改 Go 源码/API/配置字段；不引入 Docker
-- [ ] 单元测试（iptables 规则生成、store 增删、auth 密码）
-- [ ] **国内服务器 curl 一键安装不可用**（测试服务器 实测 raw.githubusercontent.com 超时被墙）：需方案——deploy.sh 同步到 gitee 镜像，或文档改 scp 本地部署方式
-- [ ] 生产部署验证
-- [ ] 迁移到 GitHub
+- [x] **国内服务器 curl 一键安装不可用**（测试服务器 实测 raw.githubusercontent.com 超时被墙）→ 已解决：OSS 镜像源 + GitHub→镜像 fallback（见变更日志）
+- [x] 生产部署验证（测试服务器 真机从 0 部署 + 自升级全链路）
+- [x] 迁移到 GitHub（含 Actions 发版 CI）
 - [ ] **中台形态演进**（远期）：几十台内单机够用；后续可拆"中台管理端 + 每服务器轻量 Agent"，iptables 核心逻辑直接复用
 
 ## 架构演进（重要决策）
