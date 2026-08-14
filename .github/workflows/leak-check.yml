@@ -11,12 +11,17 @@ jobs:
         with:
           fetch-depth: 0
 
+      # 敏感词列表存放在 GitHub Secret（LEAK_WORDS），不写入公开仓库（避免自曝内部信息）
       - name: Scan for internal info leaks
+        env:
+          LEAK_WORDS: ${{ secrets.LEAK_WORDS }}
         run: |
-          # 内部项目名/服务器代号/内部域名/内部IP —— 命中任一即失败
-          # 排除 .github（CI 配置本身含敏感词列表）和 .git
-          LEAKS=$(grep -rniE \
-            "内部项目名|内部项目名|内部项目名|内部域名|内部域名|service\.内部域名|内部域名|内部域名|内部IP|内部IP|内部IP|内部IP" \
+          if [ -z "$LEAK_WORDS" ]; then
+            echo "⚠️ 未配置 LEAK_WORDS secret，跳过泄露扫描"
+            exit 0
+          fi
+          # LEAK_WORDS 为 | 分隔的敏感词/正则片段
+          LEAKS=$(grep -rniE "$LEAK_WORDS" \
             --include="*.go" --include="*.md" --include="*.sh" --include="*.yaml" --include="*.yml" \
             --include="*.html" --include="*.json" \
             --exclude-dir=.git --exclude-dir=.github \
