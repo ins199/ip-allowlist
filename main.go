@@ -16,8 +16,9 @@ import (
 	"ip-allowlist/internal/store"
 )
 
-// Version 当前版本，发版时打 tag 保持一致。
-var Version = "v1.0.18"
+// Version 版本号。发版时由 CI 通过 -ldflags "-X main.Version=<tag>" 注入（如 v1.0.19），
+// 本地开发默认 "dev"，无需手动维护。
+var Version = "dev"
 
 func main() {
 	var (

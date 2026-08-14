@@ -84,7 +84,7 @@ ARCH="$(detect_arch)" || exit 1
 if command -v go >/dev/null; then
   resolve_src
   echo "    使用本机 Go 编译 (linux/${ARCH})..."
-  (cd "$SRC_DIR" && GOOS=linux GOARCH="$ARCH" go build -o "$BIN" .)
+  (cd "$SRC_DIR" && GOOS=linux GOARCH="$ARCH" go build -ldflags "-X main.Version=$(git describe --tags --always 2>/dev/null || echo dev)" -o "$BIN" .)
 elif [ -f "$SCRIPT_SRC/deploy/ip-allowlist" ]; then
   echo "    使用仓库内预编译二进制..."
   cp "$SCRIPT_SRC/deploy/ip-allowlist" "$BIN"
