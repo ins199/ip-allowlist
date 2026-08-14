@@ -241,6 +241,12 @@
           <span id="update-info" style="font-size:12px;color:#6b7280;"></span>
           <button id="upgrade-btn" style="display:none;font-size:12px;padding:4px 12px;border:none;border-radius:6px;background:#1a73e8;color:#fff;cursor:pointer;">升级</button>
         </div>
+        <div id="upgrade-progress-wrap" style="display:none;margin-top:10px;">
+          <div id="upgrade-progress-text" style="font-size:12px;color:#6b7280;margin-bottom:6px;">升级中...</div>
+          <div style="background:#e5e7eb;border-radius:999px;height:8px;overflow:hidden;">
+            <div id="upgrade-progress-bar" style="width:0%;height:100%;background:#1a73e8;border-radius:999px;transition:width .3s;"></div>
+          </div>
+        </div>
       </div>
     </div>
 
@@ -461,12 +467,41 @@
         }
       }).catch(function() { setText('sv-version', '--'); });
     }
+    var upgradePoll = null;
     document.getElementById('upgrade-btn').addEventListener('click', function() {
       if (!confirm('确定升级到最新版本？服务将重启约几秒，期间页面不可用。')) return;
+      var wrap = document.getElementById('upgrade-progress-wrap');
+      var bar = document.getElementById('upgrade-progress-bar');
+      var text = document.getElementById('upgrade-progress-text');
+      document.getElementById('upgrade-btn').disabled = true;
+      wrap.style.display = 'block';
+      bar.style.width = '0%';
+      text.textContent = '正在下载新版本...';
       api('/upgrade', { method: 'POST' }).then(function(d) {
-        alert(d.code === 1 ? '升级成功，服务重启中，请稍后刷新页面' : (d.msg || '升级失败'));
-      }).catch(function() { alert('升级请求失败: 网络错误'); });
+        if (d.code !== 1) { text.textContent = d.msg || '升级启动失败'; return; }
+        pollUpgrade();
+      }).catch(function() { text.textContent = '升级请求失败: 网络错误'; });
     });
+    function pollUpgrade() {
+      upgradePoll = setInterval(function() {
+        api('/upgrade/status').then(function(d) {
+          if (d.code !== 1) return;
+          var st = d.data;
+          document.getElementById('upgrade-progress-bar').style.width = (st.progress || 0) + '%';
+          document.getElementById('upgrade-progress-text').textContent = st.msg || st.phase || '升级中';
+          if (!st.running) {
+            pollStopUpgrade();
+            if (st.phase === 'error') { alert('升级失败: ' + (st.error || '未知错误')); }
+            else { alert(st.msg || '升级成功，请刷新页面'); }
+          }
+        }).catch(function() {
+          // 升级成功后服务重启，轮询请求会失败——视为重启中
+          pollStopUpgrade();
+          document.getElementById('upgrade-progress-text').textContent = '服务重启中，请稍后刷新页面...';
+        });
+      }, 800);
+    }
+    function pollStopUpgrade() { if (upgradePoll) { clearInterval(upgradePoll); upgradePoll = null; } }
     document.getElementById('check-update-btn').addEventListener('click', loadUpgradeInfo);
 
     // ===== 服务器概览 =====

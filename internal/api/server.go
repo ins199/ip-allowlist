@@ -13,6 +13,7 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -25,11 +26,22 @@ import (
 
 // Server HTTP 服务。
 type Server struct {
-	router  *gin.Engine
-	store   *store.Store
-	ipt     *iptables.Executor
-	auth    *auth.Auth
-	version string
+	router    *gin.Engine
+	store     *store.Store
+	ipt       *iptables.Executor
+	auth      *auth.Auth
+	version   string
+	upgradeMu sync.Mutex
+	upgrade   UpgradeState
+}
+
+// UpgradeState 自升级任务状态（供前端轮询展示进度）。
+type UpgradeState struct {
+	Running  bool   `json:"running"`  // 是否有任务进行中
+	Phase    string `json:"phase"`    // downloading/verifying/replacing/restarting/done/error
+	Progress int    `json:"progress"` // 0-100
+	Msg      string `json:"msg"`      // 进度文案
+	Error    string `json:"error"`    // 失败原因（phase=error 时）
 }
 
 // New 创建 HTTP 服务并注册路由。webContent 为内嵌的 web/ 目录（单二进制自带前端）。
@@ -76,6 +88,7 @@ func New(st *store.Store, ipt *iptables.Executor, a *auth.Auth, webContent fs.FS
 		authGroup.GET("/login-logs", s.handleLoginLogs)
 		authGroup.GET("/upgrade/check", s.handleUpgradeCheck)
 		authGroup.POST("/upgrade", s.handleUpgrade)
+		authGroup.GET("/upgrade/status", s.handleUpgradeStatus)
 	}
 
 	s.router = r
@@ -217,12 +230,57 @@ func (s *Server) handleUpgradeCheck(c *gin.Context) {
 	}})
 }
 
-// handleUpgrade 自升级：下载最新二进制 → 校验 → 备份当前 → 原子替换 → 重启。
+// handleUpgrade 启动异步自升级（下载→校验→备份→原子替换→重启），立即返回，进度经 /upgrade/status 轮询。
 func (s *Server) handleUpgrade(c *gin.Context) {
+	s.upgradeMu.Lock()
+	if s.upgrade.Running {
+		s.upgradeMu.Unlock()
+		c.JSON(http.StatusConflict, gin.H{"code": 0, "msg": "升级已在进行中"})
+		return
+	}
+	s.upgrade = UpgradeState{Running: true, Phase: "downloading", Progress: 0, Msg: "开始下载新版本"}
+	s.upgradeMu.Unlock()
+
+	go func() {
+		err := s.runUpgrade()
+		s.upgradeMu.Lock()
+		s.upgrade.Running = false
+		if err != nil {
+			s.upgrade.Phase = "error"
+			s.upgrade.Error = err.Error()
+			s.upgrade.Msg = "升级失败: " + err.Error()
+		} else {
+			s.upgrade.Phase = "done"
+			s.upgrade.Progress = 100
+			s.upgrade.Msg = "升级成功，服务重启中，请稍后刷新"
+		}
+		s.upgradeMu.Unlock()
+	}()
+	c.JSON(http.StatusOK, gin.H{"code": 1, "msg": "升级已开始"})
+}
+
+// handleUpgradeStatus 返回当前升级状态（前端轮询）。
+func (s *Server) handleUpgradeStatus(c *gin.Context) {
+	s.upgradeMu.Lock()
+	st := s.upgrade
+	s.upgradeMu.Unlock()
+	c.JSON(http.StatusOK, gin.H{"code": 1, "data": st})
+}
+
+// setUpgradeProgress 更新升级进度状态。
+func (s *Server) setUpgradeProgress(phase string, progress int, msg string) {
+	s.upgradeMu.Lock()
+	s.upgrade.Phase = phase
+	s.upgrade.Progress = progress
+	s.upgrade.Msg = msg
+	s.upgradeMu.Unlock()
+}
+
+// runUpgrade 执行自升级全流程（goroutine 中运行）。
+func (s *Server) runUpgrade() error {
 	arch := mapArch(runtime.GOARCH)
 	if arch == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"code": 0, "msg": "不支持的架构: " + runtime.GOARCH})
-		return
+		return fmt.Errorf("不支持的架构: %s", runtime.GOARCH)
 	}
 	asset := fmt.Sprintf("ip-allowlist-linux-%s", arch)
 	url := fmt.Sprintf("https://github.com/ins199/ip-allowlist/releases/latest/download/%s", asset)
@@ -231,44 +289,44 @@ func (s *Server) handleUpgrade(c *gin.Context) {
 	if mirror := os.Getenv("IPAW_MIRROR"); mirror != "" {
 		url = strings.TrimRight(mirror, "/") + "/" + asset
 	}
-	tmp, err := downloadToTemp(url)
+
+	s.setUpgradeProgress("downloading", 0, "正在下载新版本...")
+	tmp, err := s.downloadToTemp(url)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"code": 0, "msg": "下载失败: " + err.Error()})
-		return
+		return fmt.Errorf("下载失败: %w", err)
 	}
 	defer os.Remove(tmp)
-	// 校验下载的是可运行的 ip-allowlist 二进制
+
+	s.setUpgradeProgress("verifying", 90, "校验二进制")
 	out, err := exec.Command(tmp, "-version").Output()
 	if err != nil || !strings.Contains(string(out), "ip-allowlist") {
-		c.JSON(http.StatusInternalServerError, gin.H{"code": 0, "msg": "下载的二进制无效"})
-		return
+		return fmt.Errorf("下载的二进制无效")
 	}
+
+	s.setUpgradeProgress("replacing", 95, "备份并替换二进制")
 	binPath, err := os.Executable()
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"code": 0, "msg": "定位当前二进制失败: " + err.Error()})
-		return
+		return fmt.Errorf("定位当前二进制失败: %w", err)
 	}
-	// 备份当前二进制（回滚用），原子替换
 	bak := binPath + ".bak"
 	_ = os.Remove(bak)
 	if err := os.Rename(binPath, bak); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"code": 0, "msg": "备份当前二进制失败: " + err.Error()})
-		return
+		return fmt.Errorf("备份当前二进制失败: %w", err)
 	}
 	if err := os.Rename(tmp, binPath); err != nil {
 		_ = os.Rename(bak, binPath) // 替换失败回滚备份
-		c.JSON(http.StatusInternalServerError, gin.H{"code": 0, "msg": "替换二进制失败: " + err.Error()})
-		return
+		return fmt.Errorf("替换二进制失败: %w", err)
 	}
 	_ = os.Chmod(binPath, 0755)
-	// 延迟重启，先让响应发出
+
+	s.setUpgradeProgress("restarting", 98, "重启服务")
 	go func() {
 		time.Sleep(800 * time.Millisecond)
 		if err := exec.Command("systemctl", "restart", "ip-allowlist").Run(); err != nil {
 			log.Printf("自升级重启失败: %v", err)
 		}
 	}()
-	c.JSON(http.StatusOK, gin.H{"code": 1, "msg": "升级成功，服务重启中（请稍后刷新页面）"})
+	return nil
 }
 
 // versionNewer 判断版本 a 是否比 b 新（语义化版本，支持 v1.2.3 形式）。
@@ -336,8 +394,25 @@ func fetchLatestVersion() (string, error) {
 	return r.TagName, nil
 }
 
-// downloadToTemp 下载文件到临时路径，校验非空且大于 1MB，赋予可执行权限。
-func downloadToTemp(url string) (string, error) {
+// progressReader 包装响应体，统计已读字节并回调下载进度百分比。
+type progressReader struct {
+	r          io.Reader
+	total      int64
+	read       int64
+	onProgress func(pct int)
+}
+
+func (pr *progressReader) Read(p []byte) (int, error) {
+	n, err := pr.r.Read(p)
+	pr.read += int64(n)
+	if pr.total > 0 {
+		pr.onProgress(int(pr.read * 100 / pr.total))
+	}
+	return n, err
+}
+
+// downloadToTemp 下载文件到临时路径，上报下载进度，校验非空且大于 1MB。
+func (s *Server) downloadToTemp(url string) (string, error) {
 	client := &http.Client{Timeout: 120 * time.Second}
 	resp, err := client.Get(url)
 	if err != nil {
@@ -352,7 +427,10 @@ func downloadToTemp(url string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	_, err = io.Copy(f, resp.Body)
+	pr := &progressReader{r: resp.Body, total: resp.ContentLength, onProgress: func(pct int) {
+		s.setUpgradeProgress("downloading", pct, fmt.Sprintf("正在下载新版本... %d%%", pct))
+	}}
+	_, err = io.Copy(f, pr)
 	f.Close()
 	if err != nil {
 		os.Remove(tmp)

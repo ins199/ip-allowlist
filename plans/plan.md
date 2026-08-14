@@ -103,3 +103,4 @@
 | 2026-08-14 | feat: 自升级——页面显示版本号+检查更新（GitHub 对比）+一键升级（下载→校验→备份→原子替换→重启回滚），`/api/upgrade/check` + `/api/upgrade` |
 | 2026-08-14 | 从0真机部署验证（测试服务器 全新安装）：预编译/Release 分支、go:embed 单文件、首次启动宽松规则、登录记录、版本检查全部正常。修复 deploy.sh 缺 mkdir（从0部署目录不存在导致下载失败） |
 | 2026-08-14 | 安全脱敏：plans/plan.md 移除测试服务器 IP，git 历史重写（filter-repo）+ force push 彻底清除 |
+| 2026-08-14 | feat: 自升级加 IPAW_MIRROR 镜像前缀 + 精确进度条——升级改异步状态机，`/upgrade/status` 轮询下载百分比，前端进度条展示 |
