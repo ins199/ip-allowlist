@@ -98,7 +98,7 @@ func main() {
 	}
 
 	// HTTP 服务
-	srv := api.New(st, ipt, a)
+	srv := api.New(st, ipt, a, webFS)
 	log.Printf("ip-allowlist 启动，监听 %s，数据文件 %s", *bindAddr, *dataPath)
 	if err := srv.Run(*bindAddr); err != nil {
 		log.Fatalf("HTTP 服务启动失败: %v", err)

@@ -69,13 +69,15 @@
 
 ## 快速部署
 
+> **零依赖一键安装**：无需装 Go、无需 Docker、无需 git、无需任何编译工具链，只需 Linux 标配的 `iptables`。web 前端已 `go:embed` 内嵌进二进制，部署只有一个文件。安装脚本自动适配 CPU 架构（amd64/arm64），本机有 Go 时本地编译，无 Go 时自动从 GitHub Release 下载预编译二进制。
+
 ### 方式一：curl 一键安装（推荐，免克隆）
 
 ```bash
 sudo bash -c "$(curl -fsSL https://raw.githubusercontent.com/ins199/ip-allowlist/master/deploy.sh)" 10443 MyPass123
 ```
 
-一条命令完成：拉取安装脚本 → 自动下载/编译二进制 → 安装 systemd → 启动。无需克隆代码。
+一条命令完成：拉取安装脚本 → 自动编译或从 Release 下载二进制（按 CPU 架构自动选择）→ 安装 systemd → 启动。无需克隆代码、无需安装 Go/Docker/git。
 
 ### 方式二：克隆后一键部署
 
@@ -85,9 +87,10 @@ cd ip-allowlist
 sudo bash deploy.sh [管理端口] [管理密码] [可选域名]
 ```
 
-**场景说明**：
-- 服务器有 Go：`deploy.sh` 自动编译 Linux 二进制后部署
-- 服务器无 Go：在本地编译 `GOOS=linux GOARCH=amd64 go build -o deploy/ip-allowlist .`，把 `deploy/ip-allowlist` 传上去再跑 `deploy.sh`
+**场景说明**（安装脚本自动选择二进制来源，前端已内嵌无需额外文件）：
+1. 服务器有 Go → 本机编译，部署后即用
+2. 服务器无 Go → 自动从 GitHub Release 下载对应架构（amd64/arm64）预编译二进制，全程不依赖 git
+3. 下载失败（如服务器无法访问 GitHub）→ 可本机编译后手动上传：`GOOS=linux GOARCH=amd64 go build -o deploy/ip-allowlist .`，把文件放 `deploy/` 目录重跑 `deploy.sh`
 
 > ⚠️ 部署后**立即修改默认密码**（默认 `changeme`）。
 > ⚠️ 默认端口 `10443`（不常用，减少被扫描），可改参数或 config.yaml。
@@ -124,6 +127,27 @@ systemctl restart ip-allowlist
 ```
 
 **崩溃自愈**：服务单元配置了 `Restart=always`，进程崩溃后 systemd 会在 3 秒后自动拉起，规则自动恢复。开机也会自启。
+
+### 发版（维护者）
+
+打 tag 触发 GitHub Actions 自动交叉编译并发布预编译二进制（linux/amd64 + arm64），无需手动上传：
+
+```bash
+git tag v1.0.0
+git push origin v1.0.0
+```
+
+Actions 编译完成后，`deploy.sh` 即自动从 Release 下载新版本二进制。部署时可用 `IPAW_VERSION` 固定版本：
+
+```bash
+sudo IPAW_VERSION=v1.0.0 bash -c "$(curl -fsSL https://raw.githubusercontent.com/ins199/ip-allowlist/master/deploy.sh)" 10443 MyPass123
+```
+
+> 注：`IPAW_VERSION` 默认 `latest`（始终拉最新 Release），生产环境建议固定到具体版本号。
+
+### 升级
+
+重新执行一键部署脚本即可覆盖安装到新版本。配置（`config.yaml`）与白名单数据（`allowlist.json`）保留在 `/opt/ip-allowlist/`，不会被清空。
 
 ---
 
@@ -256,6 +280,7 @@ curl -X POST http://127.0.0.1:10443/api/login -d '{"username":"admin","password"
 ```
 ip-allowlist/
 ├── main.go                 # 入口
+├── embed.go                # go:embed 内嵌 web/ 前端进二进制（部署只需一个文件）
 ├── config.go               # 配置加载
 ├── config.example.yaml     # 配置示例
 ├── internal/
@@ -264,9 +289,10 @@ ip-allowlist/
 │   ├── iptables/           # 规则生成/应用/防锁死
 │   ├── sysinfo/            # 服务器运维信息采集
 │   └── store/              # JSON 持久化
-├── web/                    # 前端页面
+├── web/                    # 前端页面（编译时内嵌，部署无需此目录）
 ├── deploy.sh               # 一键部署入口（curl 远程/本地都支持）
 ├── deploy/                 # systemd 单元
+├── .github/workflows/      # 发版 CI（打 tag 自动编译并发布预编译二进制）
 └── README.md
 ```
 
@@ -329,7 +355,7 @@ ip-allowlist/
 
 | 组件 | 选择 | 理由 |
 |------|------|------|
-| 语言 | Go | 单二进制、跨平台编译、并发安全、部署零依赖 |
+| 语言 | Go | 单二进制、跨平台编译、并发安全、部署零依赖；CI 交叉编译出 linux/amd64 + arm64 预编译二进制 |
 | Web 框架 | gin | 轻量、性能好、社区成熟 |
 | 前端 | 原生 HTML/JS | 单文件内嵌，无构建步骤，移动端适配 |
 | 密码哈希 | bcrypt | 抗暴力破解，业界标准 |

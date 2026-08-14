@@ -41,10 +41,10 @@
 
 ## 待办
 
-- [ ] **部署链路升级：零依赖一键安装**（2026-08-13 决策：不做 Docker，用 Release 预编译二进制）
-  - 新建 `.github/workflows/release.yml`：打 tag `v*` 触发，CGO_ENABLED=0 交叉编译 linux/amd64 + arm64 并上传 Release
-  - 改 `deploy.sh`：无 Go 时按 `uname -m` 从 Release 下载预编译二进制（支持 `IPAW_VERSION` 指定版本）
-  - 更新 README 快速部署章节：明示无需装 Go/Docker/任何工具链，只需 Linux 标配 iptables；补"发版"说明
+- [x] **部署链路升级：零依赖一键安装**（2026-08-13 决策：不做 Docker，用 Release 预编译二进制；代码已完成，待真机验货）
+  - [x] `.github/workflows/release.yml`：打 tag `v*` 触发，CGO_ENABLED=0 交叉编译 linux/amd64 + arm64 并上传 Release
+  - [x] `deploy.sh`：无 Go 时按 `uname -m` 从 Release 下载预编译二进制（支持 `IPAW_VERSION` 指定版本）
+  - [x] README 快速部署章节：明示无需装 Go/Docker/任何工具链，只需 Linux 标配 iptables；补"发版"说明
   - 边界：不改 Go 源码/API/配置字段；不引入 Docker
 - [ ] 单元测试（iptables 规则生成、store 增删、auth 密码）
 - [ ] 生产部署验证
@@ -93,3 +93,6 @@
 | 2026-08-13 | 初始化项目，完成骨架/核心/API/前端/部署/README |
 | 2026-08-13 | 新增改密码 + 记住登录 + 移动端适配 |
 | 2026-08-13 | 鉴权改 JWT 无状态 + 新增服务器概览（sysinfo），README/plan 同步 |
+| 2026-08-13 | 部署链路升级：Release 预编译二进制（CI 交叉编译 amd64/arm64）+ deploy.sh 自动下载 + README 零依赖说明 |
+| 2026-08-14 | fix: "当前来源"被固化进持久化 remark 导致历史 IP 误导——自动加入备注改中性 `auto`，"当前"唯一性由前端实时 current_ip 判断，旧数据前端归一化显示 |
+| 2026-08-14 | 部署链路走读修复：Release latest URL 写错(Critical)、无 Go 场景不再依赖 git clone、web 前端 go:embed 内嵌进二进制（部署只需一个文件，前后端版本永不漂移） |

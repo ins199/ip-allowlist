@@ -3,6 +3,7 @@ package api
 
 import (
 	"fmt"
+	"io/fs"
 	"net/http"
 	"strconv"
 	"strings"
@@ -23,17 +24,28 @@ type Server struct {
 	auth   *auth.Auth
 }
 
-// New 创建 HTTP 服务并注册路由。
-func New(st *store.Store, ipt *iptables.Executor, a *auth.Auth) *Server {
+// New 创建 HTTP 服务并注册路由。webContent 为内嵌的 web/ 目录（单二进制自带前端）。
+func New(st *store.Store, ipt *iptables.Executor, a *auth.Auth, webContent fs.FS) *Server {
 	s := &Server{store: st, ipt: ipt, auth: a}
 
 	gin.SetMode(gin.ReleaseMode)
 	r := gin.Default()
 
-	// 静态页面（嵌入 web 目录）
-	r.StaticFS("/static", http.Dir("./web"))
+	// 静态页面（web 内嵌进二进制，部署不再依赖外部 web/ 目录）
+	// 注意: 不走 http.FileServer/FileFromFS——它对 embed 子目录返回 301 重定向，根路径会重定向循环；
+	// 直接 fs.ReadFile 输出内容，与原先 c.File 行为一致。
+	webSub, err := fs.Sub(webContent, "web")
+	if err != nil {
+		panic("web 资源内嵌失败: " + err.Error())
+	}
+	r.StaticFS("/static", http.FS(webSub))
 	r.GET("/", func(c *gin.Context) {
-		c.File("./web/index.html")
+		content, err := fs.ReadFile(webSub, "index.html")
+		if err != nil {
+			c.Status(http.StatusNotFound)
+			return
+		}
+		c.Data(http.StatusOK, "text/html; charset=utf-8", content)
 	})
 
 	// 登录
@@ -230,7 +242,7 @@ func (s *Server) persistCurrentIP(c *gin.Context, port int, rule store.PortRule)
 			return rule
 		}
 	}
-	if _, err := s.store.AddIP(port, cur, "auto(当前来源)"); err != nil {
+	if _, err := s.store.AddIP(port, cur, "auto"); err != nil {
 		return rule
 	}
 	if updated := s.store.GetRule(port); updated != nil {

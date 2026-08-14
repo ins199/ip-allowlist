@@ -97,7 +97,7 @@ func (e *Executor) ApplyPortRule(rule store.PortRule, currentIP string) error {
 			}
 		}
 		if !has {
-			rule.AllowList = append(rule.AllowList, store.AllowItem{IP: currentIP, Remark: "auto(当前来源)"})
+			rule.AllowList = append(rule.AllowList, store.AllowItem{IP: currentIP, Remark: "auto"})
 		}
 	}
 

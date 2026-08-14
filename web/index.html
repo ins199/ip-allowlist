@@ -370,7 +370,9 @@
           var delBtn = isCur
             ? ''
             : '<button class="del-ip" data-port="' + r.port + '" data-ip="' + esc(item.ip) + '" title="删除">✕</button>';
-          var remark = item.remark ? '<span class="remark">(' + esc(item.remark) + ')</span>' : '';
+          // 旧版本自动加入的历史备注带"当前来源"字样，与实时"当前"标签(是isCur判断)冲突，统一归一化为 auto
+          var remarkText = item.remark === 'auto(当前来源)' ? 'auto' : (item.remark || '');
+          var remark = remarkText ? '<span class="remark">(' + esc(remarkText) + ')</span>' : '';
           return '<span class="ip-item' + (isCur ? ' current' : '') + '">' + esc(item.ip) + remark + curTag + delBtn + '</span>';
         }).join('') || '<span style="color:#9ca3af;font-size:13px;">暂无白名单 IP</span>';
 
