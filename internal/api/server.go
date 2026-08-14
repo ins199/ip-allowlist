@@ -416,9 +416,9 @@ func (pr *progressReader) Read(p []byte) (int, error) {
 }
 
 // downloadToTemp 依次尝试多个下载源（默认 GitHub 官方，fallback 镜像），成功即返回；全部失败返回最后错误。
-// 每个源短超时（30s），保证镜像 fallback 快速生效。
+// 每个源短超时（10s）：正常网络下 10s 足够下载 10MB，国内 GitHub 被阻断时快速 fallback 镜像。
 func (s *Server) downloadToTemp(urls []string, dir string) (string, error) {
-	client := &http.Client{Timeout: 30 * time.Second}
+	client := &http.Client{Timeout: 10 * time.Second}
 	var lastErr error
 	for _, url := range urls {
 		tmp, err := s.downloadOne(client, url, dir)
