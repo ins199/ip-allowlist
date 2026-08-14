@@ -235,6 +235,12 @@
           <div id="sv-ports" style="margin-top:4px;">--</div>
         </div>
         <div class="sv-login" id="sv-login" style="margin-top:8px;font-size:12px;color:#6b7280;"></div>
+        <div style="margin-top:10px;padding-top:10px;border-top:1px solid #f1f3f5;display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+          <span style="font-size:13px;">版本 <b id="sv-version">--</b></span>
+          <button id="check-update-btn" style="font-size:12px;padding:4px 12px;border:none;border-radius:6px;background:#f3f4f6;color:#374151;cursor:pointer;">检查更新</button>
+          <span id="update-info" style="font-size:12px;color:#6b7280;"></span>
+          <button id="upgrade-btn" style="display:none;font-size:12px;padding:4px 12px;border:none;border-radius:6px;background:#1a73e8;color:#fff;cursor:pointer;">升级</button>
+        </div>
       </div>
     </div>
 
@@ -315,6 +321,7 @@
           loadRules();
           loadServerInfo();
           loadLoginLogs();
+          loadUpgradeInfo();
           startServerAutoRefresh();
         } else {
           document.getElementById('login-err').textContent = d.msg || '登录失败';
@@ -436,6 +443,31 @@
         }).join('');
       }).catch(function() {});
     }
+
+    // ===== 版本与自升级 =====
+    function loadUpgradeInfo() {
+      api('/upgrade/check').then(function(d) {
+        if (d.code !== 1) { setText('sv-version', '--'); return; }
+        var u = d.data;
+        setText('sv-version', u.current || '--');
+        var info = document.getElementById('update-info');
+        var btn = document.getElementById('upgrade-btn');
+        if (u.has_update) {
+          info.textContent = '发现新版本 ' + u.latest;
+          btn.style.display = 'inline-block';
+        } else {
+          info.textContent = '已是最新版本';
+          btn.style.display = 'none';
+        }
+      }).catch(function() { setText('sv-version', '--'); });
+    }
+    document.getElementById('upgrade-btn').addEventListener('click', function() {
+      if (!confirm('确定升级到最新版本？服务将重启约几秒，期间页面不可用。')) return;
+      api('/upgrade', { method: 'POST' }).then(function(d) {
+        alert(d.code === 1 ? '升级成功，服务重启中，请稍后刷新页面' : (d.msg || '升级失败'));
+      }).catch(function() { alert('升级请求失败: 网络错误'); });
+    });
+    document.getElementById('check-update-btn').addEventListener('click', loadUpgradeInfo);
 
     // ===== 服务器概览 =====
     function loadServerInfo() {

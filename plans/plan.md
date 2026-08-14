@@ -100,3 +100,4 @@
 | 2026-08-14 | 真机验证（测试服务器 测试服务器）：无 Go 服务器 Release 下载分支成功、go:embed 单文件页面正常、allowlist 保留、config 恢复原密码/secret。发现：raw.githubusercontent.com 国内被墙，curl 一键安装对国内服务器不可用 |
 | 2026-08-14 | fix: Secure cookie 导致裸 HTTP 部署登录后 401 循环、前端跳回登录页（测试服务器 真机触发）——secure 改为按 HTTPS/X-Forwarded-Proto 动态判断 |
 | 2026-08-14 | feat: 登录记录功能——成功/失败登录记录时间+来源IP，`/api/login-logs` 接口，页面单独区块展示最近 50 条 |
+| 2026-08-14 | feat: 自升级——页面显示版本号+检查更新（GitHub 对比）+一键升级（下载→校验→备份→原子替换→重启回滚），`/api/upgrade/check` + `/api/upgrade` |

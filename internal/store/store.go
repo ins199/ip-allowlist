@@ -25,8 +25,8 @@ type PortRule struct {
 
 // Config 白名单系统配置
 type Config struct {
-	Rules      []PortRule `json:"rules"`       // 各端口规则
-	LoginLogs  []LoginLog `json:"login_logs"`  // 最近登录记录（保留 MaxLoginLogs 条）
+	Rules     []PortRule `json:"rules"`      // 各端口规则
+	LoginLogs []LoginLog `json:"login_logs"` // 最近登录记录（保留 MaxLoginLogs 条）
 }
 
 // LoginLog 一次登录尝试记录。

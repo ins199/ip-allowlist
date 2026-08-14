@@ -2,10 +2,15 @@
 package api
 
 import (
+	"encoding/json"
 	"fmt"
+	"io"
 	"io/fs"
 	"log"
 	"net/http"
+	"os"
+	"os/exec"
+	"runtime"
 	"strconv"
 	"strings"
 	"time"
@@ -20,15 +25,16 @@ import (
 
 // Server HTTP 服务。
 type Server struct {
-	router *gin.Engine
-	store  *store.Store
-	ipt    *iptables.Executor
-	auth   *auth.Auth
+	router  *gin.Engine
+	store   *store.Store
+	ipt     *iptables.Executor
+	auth    *auth.Auth
+	version string
 }
 
 // New 创建 HTTP 服务并注册路由。webContent 为内嵌的 web/ 目录（单二进制自带前端）。
-func New(st *store.Store, ipt *iptables.Executor, a *auth.Auth, webContent fs.FS) *Server {
-	s := &Server{store: st, ipt: ipt, auth: a}
+func New(st *store.Store, ipt *iptables.Executor, a *auth.Auth, webContent fs.FS, version string) *Server {
+	s := &Server{store: st, ipt: ipt, auth: a, version: version}
 
 	gin.SetMode(gin.ReleaseMode)
 	r := gin.Default()
@@ -68,6 +74,8 @@ func New(st *store.Store, ipt *iptables.Executor, a *auth.Auth, webContent fs.FS
 		authGroup.POST("/change-password", s.handleChangePassword)
 		authGroup.GET("/server-info", s.handleServerInfo)
 		authGroup.GET("/login-logs", s.handleLoginLogs)
+		authGroup.GET("/upgrade/check", s.handleUpgradeCheck)
+		authGroup.POST("/upgrade", s.handleUpgrade)
 	}
 
 	s.router = r
@@ -191,6 +199,179 @@ func (s *Server) handleLogin(c *gin.Context) {
 // handleLoginLogs 返回最近登录记录（最早的在前）。
 func (s *Server) handleLoginLogs(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"code": 1, "data": s.store.GetLoginLogs()})
+}
+
+// ===== 自升级 =====
+
+// handleUpgradeCheck 检查是否有新版本（对比 GitHub 最新 release）。
+func (s *Server) handleUpgradeCheck(c *gin.Context) {
+	latest, err := fetchLatestVersion()
+	if err != nil {
+		c.JSON(http.StatusBadGateway, gin.H{"code": 0, "msg": "检查更新失败: " + err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"code": 1, "data": gin.H{
+		"current":    s.version,
+		"latest":     latest,
+		"has_update": versionNewer(latest, s.version),
+	}})
+}
+
+// handleUpgrade 自升级：下载最新二进制 → 校验 → 备份当前 → 原子替换 → 重启。
+func (s *Server) handleUpgrade(c *gin.Context) {
+	arch := mapArch(runtime.GOARCH)
+	if arch == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"code": 0, "msg": "不支持的架构: " + runtime.GOARCH})
+		return
+	}
+	url := fmt.Sprintf("https://github.com/ins199/ip-allowlist/releases/latest/download/ip-allowlist-linux-%s", arch)
+	tmp, err := downloadToTemp(url)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"code": 0, "msg": "下载失败: " + err.Error()})
+		return
+	}
+	defer os.Remove(tmp)
+	// 校验下载的是可运行的 ip-allowlist 二进制
+	out, err := exec.Command(tmp, "-version").Output()
+	if err != nil || !strings.Contains(string(out), "ip-allowlist") {
+		c.JSON(http.StatusInternalServerError, gin.H{"code": 0, "msg": "下载的二进制无效"})
+		return
+	}
+	binPath, err := os.Executable()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"code": 0, "msg": "定位当前二进制失败: " + err.Error()})
+		return
+	}
+	// 备份当前二进制（回滚用），原子替换
+	bak := binPath + ".bak"
+	_ = os.Remove(bak)
+	if err := os.Rename(binPath, bak); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"code": 0, "msg": "备份当前二进制失败: " + err.Error()})
+		return
+	}
+	if err := os.Rename(tmp, binPath); err != nil {
+		_ = os.Rename(bak, binPath) // 替换失败回滚备份
+		c.JSON(http.StatusInternalServerError, gin.H{"code": 0, "msg": "替换二进制失败: " + err.Error()})
+		return
+	}
+	_ = os.Chmod(binPath, 0755)
+	// 延迟重启，先让响应发出
+	go func() {
+		time.Sleep(800 * time.Millisecond)
+		if err := exec.Command("systemctl", "restart", "ip-allowlist").Run(); err != nil {
+			log.Printf("自升级重启失败: %v", err)
+		}
+	}()
+	c.JSON(http.StatusOK, gin.H{"code": 1, "msg": "升级成功，服务重启中（请稍后刷新页面）"})
+}
+
+// versionNewer 判断版本 a 是否比 b 新（语义化版本，支持 v1.2.3 形式）。
+func versionNewer(a, b string) bool {
+	if a == "" {
+		return false
+	}
+	if b == "" {
+		return true
+	}
+	an, bn := versionNums(a), versionNums(b)
+	for i := 0; i < len(an) && i < len(bn); i++ {
+		if an[i] != bn[i] {
+			return an[i] > bn[i]
+		}
+	}
+	return len(an) > len(bn)
+}
+
+// versionNums 将版本字符串解析为数字切片（忽略非数字段）。
+func versionNums(v string) []int {
+	var out []int
+	for _, p := range strings.Split(strings.TrimPrefix(v, "v"), ".") {
+		var seg string
+		for _, r := range p {
+			if r >= '0' && r <= '9' {
+				seg += string(r)
+			} else {
+				break
+			}
+		}
+		if seg == "" {
+			out = append(out, 0)
+			continue
+		}
+		n, _ := strconv.Atoi(seg)
+		out = append(out, n)
+	}
+	return out
+}
+
+// fetchLatestVersion 从 GitHub API 查询最新 release tag。
+func fetchLatestVersion() (string, error) {
+	req, err := http.NewRequest("GET", "https://api.github.com/repos/ins199/ip-allowlist/releases/latest", nil)
+	if err != nil {
+		return "", err
+	}
+	req.Header.Set("Accept", "application/vnd.github+json")
+	req.Header.Set("User-Agent", "ip-allowlist")
+	client := &http.Client{Timeout: 10 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return "", fmt.Errorf("GitHub API HTTP %d", resp.StatusCode)
+	}
+	var r struct {
+		TagName string `json:"tag_name"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&r); err != nil {
+		return "", err
+	}
+	return r.TagName, nil
+}
+
+// downloadToTemp 下载文件到临时路径，校验非空且大于 1MB，赋予可执行权限。
+func downloadToTemp(url string) (string, error) {
+	client := &http.Client{Timeout: 120 * time.Second}
+	resp, err := client.Get(url)
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return "", fmt.Errorf("HTTP %d", resp.StatusCode)
+	}
+	tmp := fmt.Sprintf("/tmp/ip-allowlist.upgrade.%d", os.Getpid())
+	f, err := os.Create(tmp)
+	if err != nil {
+		return "", err
+	}
+	_, err = io.Copy(f, resp.Body)
+	f.Close()
+	if err != nil {
+		os.Remove(tmp)
+		return "", err
+	}
+	fi, err := os.Stat(tmp)
+	if err != nil {
+		os.Remove(tmp)
+		return "", err
+	}
+	if fi.Size() < 1024*1024 {
+		os.Remove(tmp)
+		return "", fmt.Errorf("文件过小(%d 字节)，疑似错误响应", fi.Size())
+	}
+	_ = os.Chmod(tmp, 0755)
+	return tmp, nil
+}
+
+// mapArch 将 GOARCH 映射为 Release 资产名中的架构标识。
+func mapArch(goarch string) string {
+	switch goarch {
+	case "amd64", "arm64":
+		return goarch
+	}
+	return ""
 }
 
 type changePassReq struct {

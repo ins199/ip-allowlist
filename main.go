@@ -16,6 +16,9 @@ import (
 	"ip-allowlist/internal/store"
 )
 
+// Version 当前版本，发版时打 tag 保持一致。
+var Version = "v1.0.2"
+
 func main() {
 	var (
 		configPath  = flag.String("config", "/opt/ip-allowlist/config.yaml", "配置文件路径")
@@ -26,7 +29,7 @@ func main() {
 	flag.Parse()
 
 	if *showVersion {
-		fmt.Println("ip-allowlist v1.0.0")
+		fmt.Printf("ip-allowlist %s\n", Version)
 		return
 	}
 
@@ -98,7 +101,7 @@ func main() {
 	}
 
 	// HTTP 服务
-	srv := api.New(st, ipt, a, webFS)
+	srv := api.New(st, ipt, a, webFS, Version)
 	log.Printf("ip-allowlist 启动，监听 %s，数据文件 %s", *bindAddr, *dataPath)
 	if err := srv.Run(*bindAddr); err != nil {
 		log.Fatalf("HTTP 服务启动失败: %v", err)
