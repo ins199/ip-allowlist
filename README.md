@@ -149,6 +149,19 @@ sudo IPAW_VERSION=v1.0.0 bash -c "$(curl -fsSL https://raw.githubusercontent.com
 
 重新执行一键部署脚本即可覆盖安装到新版本。配置（`config.yaml`）与白名单数据（`allowlist.json`）保留在 `/opt/ip-allowlist/`，不会被清空。
 
+### 国内镜像源（可选）
+
+国内服务器（如阿里云）访问 GitHub release 资产常被限速/阻断。可通过 `IPAW_MIRROR` 环境变量指定可达的镜像前缀（如阿里云 OSS 公共读桶）：
+
+```ini
+# 在 systemd 单元 [Service] 段添加
+Environment=IPAW_MIRROR=https://your-bucket.oss-cn-shenzhen.aliyuncs.com/
+```
+
+自升级**默认先走 GitHub 官方源**，下载失败（每源 10s 超时）自动 fallback 到镜像。
+
+> 本项目 CI 已支持发版时同步上传二进制到阿里云 OSS：配置 GitHub Secrets `OSS_BUCKET` / `OSS_ENDPOINT` / `OSS_AK_ID` / `OSS_AK_SECRET`（RAM 子用户最小权限）后，打 tag 发版会自动上传，免手动同步。
+
 ---
 
 ## 使用

@@ -2,6 +2,22 @@
 
 所有重要变更记录在此。版本格式遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## v1.0.17 (2026-08-14)
+
+- perf: 自升级 GitHub 源超时 30s→10s，国内 GitHub 被阻断时更快 fallback 镜像
+
+## v1.0.16 (2026-08-14)
+
+- chore: 版本号更新（GitHub→OSS fallback 真机验证）
+
+## v1.0.15 (2026-08-14)
+
+- feat: 自升级**默认走 GitHub 官方源**，下载失败自动 fallback 到 `IPAW_MIRROR` 镜像（每源 30s 超时快速切换）
+
+## v1.0.14 (2026-08-14)
+
+- feat: CI 发版时同步上传二进制到**阿里云 OSS 镜像源**（`IPAW_MIRROR` 指向 OSS，国内可达），未配置 secrets 时跳过
+
 ## v1.0.13 (2026-08-14)
 
 - chore: 版本号更新（自升级自动刷新演示目标）
