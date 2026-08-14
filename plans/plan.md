@@ -101,3 +101,5 @@
 | 2026-08-14 | fix: Secure cookie 导致裸 HTTP 部署登录后 401 循环、前端跳回登录页（测试服务器 真机触发）——secure 改为按 HTTPS/X-Forwarded-Proto 动态判断 |
 | 2026-08-14 | feat: 登录记录功能——成功/失败登录记录时间+来源IP，`/api/login-logs` 接口，页面单独区块展示最近 50 条 |
 | 2026-08-14 | feat: 自升级——页面显示版本号+检查更新（GitHub 对比）+一键升级（下载→校验→备份→原子替换→重启回滚），`/api/upgrade/check` + `/api/upgrade` |
+| 2026-08-14 | 从0真机部署验证（测试服务器 全新安装）：预编译/Release 分支、go:embed 单文件、首次启动宽松规则、登录记录、版本检查全部正常。修复 deploy.sh 缺 mkdir（从0部署目录不存在导致下载失败） |
+| 2026-08-14 | 安全脱敏：plans/plan.md 移除测试服务器 IP，git 历史重写（filter-repo）+ force push 彻底清除 |
