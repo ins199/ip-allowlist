@@ -17,7 +17,7 @@ import (
 )
 
 // Version 当前版本，发版时打 tag 保持一致。
-var Version = "v1.0.13"
+var Version = "v1.0.14"
 
 func main() {
 	var (
