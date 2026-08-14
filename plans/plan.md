@@ -116,3 +116,5 @@
 | 2026-08-14 | 10s fallback 真机验证完成（v1.0.18）：日志确认 GitHub 恰好 10s 超时→自动切 OSS→升级成功，优化生效 |
 | 2026-08-14 | 版本号自动生成（v1.0.19）：main.go 默认 `dev`，CI/deploy.sh 用 `-ldflags -X main.Version=<tag>` 注入，发版不再手改版本号。验证：OSS 二进制 -version 正确显示 v1.0.19 |
 | 2026-08-14 | 从 内部项目 适配 6 个核心开发流程 skill 到本仓库（sync/feature/bugfix/hotfix/refactor/test）：保留方法论骨架，替换为 ip-allowlist 技术栈（gin 分层/防锁死/dry-run/systemctl），已脱敏内部信息 |
+| 2026-08-14 | 生产服务器（正式环境，内部项目 服务器 [内部域名]/[服务器IP]）部署升级：v1.0.0→v1.0.20，严格模式规则/白名单/config 全保留。发现 SSH 断连是域名解析到旧 IP，用稳定 IP 解决 |
+| 2026-08-14 | fix（v1.0.20）：cookie 自动登录时初始加载不显示版本号/登录记录——初始加载补 loadLoginLogs+loadUpgradeInfo（用户刷新 生产服务器 页面触发） |
