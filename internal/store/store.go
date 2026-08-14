@@ -25,8 +25,20 @@ type PortRule struct {
 
 // Config 白名单系统配置
 type Config struct {
-	Rules []PortRule `json:"rules"` // 各端口规则
+	Rules      []PortRule `json:"rules"`       // 各端口规则
+	LoginLogs  []LoginLog `json:"login_logs"`  // 最近登录记录（保留 MaxLoginLogs 条）
 }
+
+// LoginLog 一次登录尝试记录。
+type LoginLog struct {
+	Time     string `json:"time"`     // 登录时间（RFC3339）
+	IP       string `json:"ip"`       // 来源 IP
+	Success  bool   `json:"success"`  // 是否成功
+	Username string `json:"username"` // 尝试登录的用户名
+}
+
+// MaxLoginLogs 登录记录保留条数。
+const MaxLoginLogs = 50
 
 // Store 白名单存储，带锁保护并发读写
 type Store struct {
@@ -192,4 +204,24 @@ func (s *Store) SetStrict(port int, strict bool) error {
 		}
 	}
 	return nil
+}
+
+// AddLoginLog 追加一条登录记录（保留最近 MaxLoginLogs 条）并保存。
+func (s *Store) AddLoginLog(log LoginLog) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.cfg.LoginLogs = append(s.cfg.LoginLogs, log)
+	if len(s.cfg.LoginLogs) > MaxLoginLogs {
+		s.cfg.LoginLogs = s.cfg.LoginLogs[len(s.cfg.LoginLogs)-MaxLoginLogs:]
+	}
+	return s.saveLocked()
+}
+
+// GetLoginLogs 返回登录记录副本（最早的在前）。
+func (s *Store) GetLoginLogs() []LoginLog {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	out := make([]LoginLog, len(s.cfg.LoginLogs))
+	copy(out, s.cfg.LoginLogs)
+	return out
 }

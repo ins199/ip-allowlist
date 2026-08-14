@@ -238,6 +238,14 @@
       </div>
     </div>
 
+    <!-- 最近登录记录 -->
+    <div class="card">
+      <div class="card-header">📋 最近登录记录 <span style="font-size:12px;color:#9ca3af;font-weight:normal;">保留最近 50 条</span></div>
+      <div class="card-body">
+        <div id="login-logs"><span style="color:#9ca3af;font-size:13px;">--</span></div>
+      </div>
+    </div>
+
     <!-- 新增端口规则 -->
     <div class="card">
       <div class="card-header">➕ 新增端口规则</div>
@@ -306,6 +314,7 @@
           showMain();
           loadRules();
           loadServerInfo();
+          loadLoginLogs();
           startServerAutoRefresh();
         } else {
           document.getElementById('login-err').textContent = d.msg || '登录失败';
@@ -407,6 +416,25 @@
         document.getElementById('current-ip').textContent = rules.length ? (rules[0].current_ip || '--') : '--';
         renderRules(rules);
       }).catch(function() { document.getElementById('rules-list').innerHTML = '<div class="card"><div class="loading">加载失败</div></div>'; });
+    }
+
+    // ===== 最近登录记录 =====
+    function loadLoginLogs() {
+      api('/login-logs').then(function(d) {
+        if (d.code !== 1) return;
+        var logs = d.data || [];
+        var el = document.getElementById('login-logs');
+        if (!logs.length) { el.innerHTML = '<span style="color:#9ca3af;font-size:13px;">暂无登录记录</span>'; return; }
+        el.innerHTML = logs.slice().reverse().map(function(l) {
+          var badge = l.success
+            ? '<span style="display:inline-block;padding:1px 8px;border-radius:999px;font-size:12px;background:#e8f5ee;color:#1a7f47;">成功</span>'
+            : '<span style="display:inline-block;padding:1px 8px;border-radius:999px;font-size:12px;background:#fdecec;color:#c0392b;">失败</span>';
+          return '<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid #f1f3f5;font-size:13px;">' +
+            '<span>' + esc(l.username || '') + ' @ ' + esc(l.ip || '') + '</span>' +
+            '<span style="display:flex;align-items:center;gap:8px;">' + esc(l.time || '') + badge + '</span>' +
+          '</div>';
+        }).join('');
+      }).catch(function() {});
     }
 
     // ===== 服务器概览 =====

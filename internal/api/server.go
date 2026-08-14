@@ -4,9 +4,11 @@ package api
 import (
 	"fmt"
 	"io/fs"
+	"log"
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/gin-gonic/gin"
 
@@ -65,6 +67,7 @@ func New(st *store.Store, ipt *iptables.Executor, a *auth.Auth, webContent fs.FS
 		authGroup.GET("/sync", s.handleSync)
 		authGroup.POST("/change-password", s.handleChangePassword)
 		authGroup.GET("/server-info", s.handleServerInfo)
+		authGroup.GET("/login-logs", s.handleLoginLogs)
 	}
 
 	s.router = r
@@ -106,6 +109,15 @@ func (s *Server) tokenFromRequest(c *gin.Context) string {
 	return c.Query("token")
 }
 
+// secureCookie 判断是否应设 Secure：仅 HTTPS（TLS 或 nginx 反代 X-Forwarded-Proto: https）时设。
+// 否则裸 HTTP 部署下浏览器不发送 Secure cookie，登录后所有请求 401、前端跳回登录页。
+func secureCookie(c *gin.Context) bool {
+	if c.Request.TLS != nil {
+		return true
+	}
+	return strings.EqualFold(c.GetHeader("X-Forwarded-Proto"), "https")
+}
+
 // setTokenCookie 写入 HttpOnly Cookie。
 func (s *Server) setTokenCookie(c *gin.Context, token string, remember bool) {
 	// 短会话 24h，长会话 30 天
@@ -114,13 +126,13 @@ func (s *Server) setTokenCookie(c *gin.Context, token string, remember bool) {
 		maxAge = 30 * 24 * 3600
 	}
 	c.SetSameSite(http.SameSiteLaxMode)
-	c.SetCookie("ipaw_token", token, maxAge, "/", "", true, true) // Secure + HttpOnly
+	c.SetCookie("ipaw_token", token, maxAge, "/", "", secureCookie(c), true)
 }
 
 // clearTokenCookie 清除 token Cookie。
 func (s *Server) clearTokenCookie(c *gin.Context) {
 	c.SetSameSite(http.SameSiteLaxMode)
-	c.SetCookie("ipaw_token", "", -1, "/", "", true, true)
+	c.SetCookie("ipaw_token", "", -1, "/", "", secureCookie(c), true)
 }
 
 // clientIP 获取客户端真实 IP（含 X-Forwarded-For）。
@@ -153,14 +165,32 @@ func (s *Server) handleLogin(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"code": 0, "msg": "参数错误"})
 		return
 	}
+	// 记录登录日志（成功与失败都记，失败含暴力破解探测）
+	recordLogin := func(success bool) {
+		if err := s.store.AddLoginLog(store.LoginLog{
+			Time:     time.Now().Format(time.RFC3339),
+			IP:       clientIP(c),
+			Success:  success,
+			Username: req.Username,
+		}); err != nil {
+			log.Printf("记录登录日志失败: %v", err)
+		}
+	}
 	token, err := s.auth.Login(req.Username, req.Password, req.Remember)
 	if err != nil {
+		recordLogin(false)
 		c.JSON(http.StatusUnauthorized, gin.H{"code": 0, "msg": err.Error()})
 		return
 	}
+	recordLogin(true)
 	// 签发 JWT 写入 HttpOnly Cookie（防 XSS 偷 token）
 	s.setTokenCookie(c, token, req.Remember)
 	c.JSON(http.StatusOK, gin.H{"code": 1, "data": gin.H{"token": token}})
+}
+
+// handleLoginLogs 返回最近登录记录（最早的在前）。
+func (s *Server) handleLoginLogs(c *gin.Context) {
+	c.JSON(http.StatusOK, gin.H{"code": 1, "data": s.store.GetLoginLogs()})
 }
 
 type changePassReq struct {

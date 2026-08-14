@@ -47,6 +47,7 @@
   - [x] README 快速部署章节：明示无需装 Go/Docker/任何工具链，只需 Linux 标配 iptables；补"发版"说明
   - 边界：不改 Go 源码/API/配置字段；不引入 Docker
 - [ ] 单元测试（iptables 规则生成、store 增删、auth 密码）
+- [ ] **国内服务器 curl 一键安装不可用**（测试服务器 实测 raw.githubusercontent.com 超时被墙）：需方案——deploy.sh 同步到 gitee 镜像，或文档改 scp 本地部署方式
 - [ ] 生产部署验证
 - [ ] 迁移到 GitHub
 - [ ] **中台形态演进**（远期）：几十台内单机够用；后续可拆"中台管理端 + 每服务器轻量 Agent"，iptables 核心逻辑直接复用
@@ -96,3 +97,6 @@
 | 2026-08-13 | 部署链路升级：Release 预编译二进制（CI 交叉编译 amd64/arm64）+ deploy.sh 自动下载 + README 零依赖说明 |
 | 2026-08-14 | fix: "当前来源"被固化进持久化 remark 导致历史 IP 误导——自动加入备注改中性 `auto`，"当前"唯一性由前端实时 current_ip 判断，旧数据前端归一化显示 |
 | 2026-08-14 | 部署链路走读修复：Release latest URL 写错(Critical)、无 Go 场景不再依赖 git clone、web 前端 go:embed 内嵌进二进制（部署只需一个文件，前后端版本永不漂移） |
+| 2026-08-14 | 真机验证（测试服务器 测试服务器）：无 Go 服务器 Release 下载分支成功、go:embed 单文件页面正常、allowlist 保留、config 恢复原密码/secret。发现：raw.githubusercontent.com 国内被墙，curl 一键安装对国内服务器不可用 |
+| 2026-08-14 | fix: Secure cookie 导致裸 HTTP 部署登录后 401 循环、前端跳回登录页（测试服务器 真机触发）——secure 改为按 HTTPS/X-Forwarded-Proto 动态判断 |
+| 2026-08-14 | feat: 登录记录功能——成功/失败登录记录时间+来源IP，`/api/login-logs` 接口，页面单独区块展示最近 50 条 |
