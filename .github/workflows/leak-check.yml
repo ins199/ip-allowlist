@@ -11,6 +11,12 @@ jobs:
         with:
           fetch-depth: 0
 
+      # gitleaks：扫描已知密钥格式（AWS Key/GitHub Token/私钥等），平台级 secret 兜底
+      - name: Gitleaks secret scan
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
       # 敏感词列表存放在 GitHub Secret（LEAK_WORDS），不写入公开仓库（避免自曝内部信息）
       - name: Scan for internal info leaks
         env:

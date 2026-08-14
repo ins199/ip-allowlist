@@ -1,0 +1,12 @@
+#!/bin/bash
+# ip-allowlist pre-commit hook：提交前 gitleaks 扫描密钥格式。
+# 内部敏感词检查由 CI leak-check 完成（敏感词在 GitHub Secret，不写入仓库）。
+# 用法：git config core.hooksPath .githooks
+
+if command -v gitleaks >/dev/null 2>&1; then
+  if ! gitleaks protect --staged --redact --no-banner 2>/dev/null; then
+    echo "❌ gitleaks 检测到疑似密钥，提交被阻止"
+    exit 1
+  fi
+fi
+exit 0
