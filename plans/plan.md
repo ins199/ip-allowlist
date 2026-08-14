@@ -34,6 +34,7 @@
 - [x] 国内镜像源：阿里云 OSS 公共读桶 + CI 自动同步 + 默认 GitHub→镜像 fallback（IPAW_MIRROR）
 - [x] 版本号自动生成：CI/deploy.sh 用 ldflags 从 git tag 注入，发版只打 tag
 - [x] 安全：plans/plan.md 与 git 历史脱敏（filter-repo 重写）
+- [x] 文档：中英双语 README（README.md + README.en.md）+ CHANGELOG 正式版
 
 ## 测试清单
 
@@ -123,3 +124,4 @@
 | 2026-08-14 | 安全：清除 plan.md 内部信息泄露（内部项目名/服务器域名/IP，filter-repo 重写历史 + force push + 重打 tags）；新增 leak-check CI（push/PR 扫描敏感词，命中失败，已验证通过）|
 | 2026-08-14 | 优化（v1.0.22）：I2 升级失败自动回滚（升级写 .ipaw-upgrade-pending 标记，新版本初始化失败自动 .bak 恢复+重启）；I4 clientIP 仅信任可信反代 header（防伪造 X-Forwarded-For 破坏防锁死）|
 | 2026-08-14 | **版本重置**：完整程序作为正式首版 v1.0.0 发布（含自升级/镜像/安全优化）。删除全部历史 v1.0.0~v1.0.22 的 tag 与 Release，当前 master 重打 v1.0.0，Release + OSS 已同步 |
+| 2026-08-14 | docs: 新增英文版 README.en.md（完整翻译），README.md 加语言切换，开源国际化 |
