@@ -500,13 +500,25 @@
           document.getElementById('upgrade-progress-text').textContent = st.msg || st.phase || '升级中';
           if (!st.running) {
             pollStopUpgrade();
-            if (st.phase === 'error') { alert('升级失败: ' + (st.error || '未知错误')); }
-            else { alert(st.msg || '升级成功，请刷新页面'); }
+            if (st.phase === 'error') {
+              // 失败：显示错误并恢复升级按钮，可重试
+              document.getElementById('upgrade-progress-text').textContent = '升级失败: ' + (st.error || '未知错误');
+              var btn = document.getElementById('upgrade-btn');
+              btn.disabled = false;
+              btn.textContent = '升级';
+            } else {
+              // 成功：进度 100% + 自动刷新页面（新版本"已是最新"，升级按钮自然隐藏）
+              document.getElementById('upgrade-progress-bar').style.width = '100%';
+              document.getElementById('upgrade-progress-text').textContent = '升级成功，正在自动刷新页面...';
+              setTimeout(function() { location.reload(); }, 1500);
+            }
           }
         }).catch(function() {
-          // 升级成功后服务重启，轮询请求会失败——视为重启中
+          // 服务重启导致轮询请求失败——视为升级成功，自动刷新
           pollStopUpgrade();
-          document.getElementById('upgrade-progress-text').textContent = '服务重启中，请稍后刷新页面...';
+          document.getElementById('upgrade-progress-bar').style.width = '100%';
+          document.getElementById('upgrade-progress-text').textContent = '服务重启中，正在自动刷新页面...';
+          setTimeout(function() { location.reload(); }, 2000);
         });
       }, 800);
     }
