@@ -126,3 +126,4 @@
 | 2026-08-14 | **版本重置**：完整程序作为正式首版 v1.0.0 发布（含自升级/镜像/安全优化）。删除全部历史 v1.0.0~v1.0.22 的 tag 与 Release，当前 master 重打 v1.0.0，Release + OSS 已同步 |
 | 2026-08-14 | docs: 新增英文版 README.en.md（完整翻译），README.md 加语言切换，开源国际化 |
 | 2026-08-14 | test: 单元测试——store（增删/去重/持久化/原子写/损坏恢复/登录记录上限）、iptables（dry-run 防锁死/空白拒绝/自动补IP）、auth（登录/校验/改密/过期token），全部通过 |
+| 2026-08-14 | 安全：全面泄露复查发现并修复 commit message 里的 `zkkf`（filter-repo --replace-message 补漏）——工作区/历史文件内容/commit messages 均已确认无内部信息 |
