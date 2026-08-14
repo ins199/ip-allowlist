@@ -102,7 +102,7 @@
 | 2026-08-13 | 部署链路升级：Release 预编译二进制（CI 交叉编译 amd64/arm64）+ deploy.sh 自动下载 + README 零依赖说明 |
 | 2026-08-14 | fix: "当前来源"被固化进持久化 remark 导致历史 IP 误导——自动加入备注改中性 `auto`，"当前"唯一性由前端实时 current_ip 判断，旧数据前端归一化显示 |
 | 2026-08-14 | 部署链路走读修复：Release latest URL 写错(Critical)、无 Go 场景不再依赖 git clone、web 前端 go:embed 内嵌进二进制（部署只需一个文件，前后端版本永不漂移） |
-| 2026-08-14 | 真机验证（测试服务器 测试服务器）：无 Go 服务器 Release 下载分支成功、go:embed 单文件页面正常、allowlist 保留、config 恢复原密码/secret。发现：raw.githubusercontent.com 国内被墙，curl 一键安装对国内服务器不可用 |
+| 2026-08-14 | 真机验证（测试服务器）：无 Go 服务器 Release 下载分支成功、go:embed 单文件页面正常、allowlist 保留、config 恢复原密码/secret。发现：raw.githubusercontent.com 国内被墙，curl 一键安装对国内服务器不可用 |
 | 2026-08-14 | fix: Secure cookie 导致裸 HTTP 部署登录后 401 循环、前端跳回登录页（测试服务器 真机触发）——secure 改为按 HTTPS/X-Forwarded-Proto 动态判断 |
 | 2026-08-14 | feat: 登录记录功能——成功/失败登录记录时间+来源IP，`/api/login-logs` 接口，页面单独区块展示最近 50 条 |
 | 2026-08-14 | feat: 自升级——页面显示版本号+检查更新（GitHub 对比）+一键升级（下载→校验→备份→原子替换→重启回滚），`/api/upgrade/check` + `/api/upgrade` |
@@ -116,6 +116,6 @@
 | 2026-08-14 | 10s fallback 真机验证完成（v1.0.18）：日志确认 GitHub 恰好 10s 超时→自动切 OSS→升级成功，优化生效 |
 | 2026-08-14 | 版本号自动生成（v1.0.19）：main.go 默认 `dev`，CI/deploy.sh 用 `-ldflags -X main.Version=<tag>` 注入，发版不再手改版本号。验证：OSS 二进制 -version 正确显示 v1.0.19 |
 | 2026-08-14 | 从 内部项目 适配 6 个核心开发流程 skill 到本仓库（sync/feature/bugfix/hotfix/refactor/test）：保留方法论骨架，替换为 ip-allowlist 技术栈（gin 分层/防锁死/dry-run/systemctl），已脱敏内部信息 |
-| 2026-08-14 | 生产服务器（正式环境，内部项目 服务器 [内部域名]/[服务器IP]）部署升级：v1.0.0→v1.0.20，严格模式规则/白名单/config 全保留。发现 SSH 断连是域名解析到旧 IP，用稳定 IP 解决 |
+| 2026-08-14 | 正式环境部署升级：v1.0.0→v1.0.20，严格模式规则/白名单/config 全保留。发现 SSH 断连是域名解析到旧 IP，用稳定 IP 解决 |
 | 2026-08-14 | fix（v1.0.20）：cookie 自动登录时初始加载不显示版本号/登录记录——初始加载补 loadLoginLogs+loadUpgradeInfo（用户刷新 生产服务器 页面触发） |
 | 2026-08-14 | 安全优化（v1.0.21）：① deploy.sh 生成随机 JWT secret + main.go 拒绝默认 secret（防伪造 token）② store 原子写（tmp+rename）+ 损坏自 .bak 恢复（防崩溃损坏）③ 自升级 SHA256 校验和（release.yml 发 SHA256SUMS，升级拉同源校验，防镜像投毒）|
