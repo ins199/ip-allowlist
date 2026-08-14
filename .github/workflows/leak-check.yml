@@ -14,10 +14,12 @@ jobs:
       - name: Scan for internal info leaks
         run: |
           # 内部项目名/服务器代号/内部域名/内部IP —— 命中任一即失败
+          # 排除 .github（CI 配置本身含敏感词列表）和 .git
           LEAKS=$(grep -rniE \
             "内部项目名|内部项目名|内部项目名|内部域名|内部域名|service\.内部域名|内部域名|内部域名|内部IP|内部IP|内部IP|内部IP" \
             --include="*.go" --include="*.md" --include="*.sh" --include="*.yaml" --include="*.yml" \
-            --include="*.html" --include="*.json" --include="*.yml" \
+            --include="*.html" --include="*.json" \
+            --exclude-dir=.git --exclude-dir=.github \
             . 2>/dev/null | grep -v "^Binary" || true)
           if [ -n "$LEAKS" ]; then
             echo "❌ 检测到内部信息泄露："
