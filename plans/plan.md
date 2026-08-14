@@ -109,3 +109,4 @@
 | 2026-08-14 | 自升级镜像源：gitee 不可行（强制登录，匿名下载 403，自升级无法带认证）→ 改用阿里云 OSS 公共读桶 + CI 自动同步上传，IPAW_MIRROR 指向 OSS。配 RAM 子用户最小权限 + GitHub Secrets（OSS_BUCKET/OSS_ENDPOINT/OSS_AK_ID/OSS_AK_SECRET）|
 | 2026-08-14 | 自升级下载源策略：**默认 GitHub，失败自动 fallback IPAW_MIRROR 镜像**（每源超时 30s→10s）。真机验证：GitHub 超时→OSS 接管升级 v1.0.15→v1.0.16；OSS 下载 0.28s（阿里云互访）|
 | 2026-08-14 | 10s fallback 真机验证完成（v1.0.18）：日志确认 GitHub 恰好 10s 超时→自动切 OSS→升级成功，优化生效 |
+| 2026-08-14 | 版本号自动生成（v1.0.19）：main.go 默认 `dev`，CI/deploy.sh 用 `-ldflags -X main.Version=<tag>` 注入，发版不再手改版本号。验证：OSS 二进制 -version 正确显示 v1.0.19 |
