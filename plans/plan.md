@@ -122,3 +122,4 @@
 | 2026-08-14 | 安全优化（v1.0.21）：① deploy.sh 生成随机 JWT secret + main.go 拒绝默认 secret（防伪造 token）② store 原子写（tmp+rename）+ 损坏自 .bak 恢复（防崩溃损坏）③ 自升级 SHA256 校验和（release.yml 发 SHA256SUMS，升级拉同源校验，防镜像投毒）|
 | 2026-08-14 | 安全：清除 plan.md 内部信息泄露（内部项目名/服务器域名/IP，filter-repo 重写历史 + force push + 重打 tags）；新增 leak-check CI（push/PR 扫描敏感词，命中失败，已验证通过）|
 | 2026-08-14 | 优化（v1.0.22）：I2 升级失败自动回滚（升级写 .ipaw-upgrade-pending 标记，新版本初始化失败自动 .bak 恢复+重启）；I4 clientIP 仅信任可信反代 header（防伪造 X-Forwarded-For 破坏防锁死）|
+| 2026-08-14 | **版本重置**：完整程序作为正式首版 v1.0.0 发布（含自升级/镜像/安全优化）。删除全部历史 v1.0.0~v1.0.22 的 tag 与 Release，当前 master 重打 v1.0.0，Release + OSS 已同步 |

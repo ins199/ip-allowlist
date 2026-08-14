@@ -130,24 +130,33 @@ systemctl restart ip-allowlist
 
 ### 发版（维护者）
 
-打 tag 触发 GitHub Actions 自动交叉编译并发布预编译二进制（linux/amd64 + arm64），无需手动上传：
+打 tag 触发 GitHub Actions 自动交叉编译并发布预编译二进制（linux/amd64 + arm64），**版本号从 tag 自动注入**（无需手动改代码）：
 
 ```bash
-git tag v1.0.0
-git push origin v1.0.0
+git tag v1.0.1
+git push origin v1.0.1
 ```
 
-Actions 编译完成后，`deploy.sh` 即自动从 Release 下载新版本二进制。部署时可用 `IPAW_VERSION` 固定版本：
+Actions 自动完成：
+1. 交叉编译 linux/amd64 + arm64，`-ldflags` 注入版本号
+2. 生成 `SHA256SUMS` 校验和（Release + OSS 镜像）
+3. 发布 GitHub Release + 同步阿里云 OSS（配置 `OSS_*` secrets 后）
+
+> CI 还含 **Leak Check**：push/PR 扫描内部信息（敏感词列表存于 GitHub Secret `LEAK_WORDS`，不写入公开仓库），命中即 CI 失败，防止开源仓库泄露内部信息。
+
+部署时可用 `IPAW_VERSION` 固定版本：
 
 ```bash
-sudo IPAW_VERSION=v1.0.0 bash -c "$(curl -fsSL https://raw.githubusercontent.com/ins199/ip-allowlist/master/deploy.sh)" 10443 MyPass123
+sudo IPAW_VERSION=v1.0.1 bash -c "$(curl -fsSL https://raw.githubusercontent.com/ins199/ip-allowlist/master/deploy.sh)" 10443 MyPass123
 ```
 
 > 注：`IPAW_VERSION` 默认 `latest`（始终拉最新 Release），生产环境建议固定到具体版本号。
 
 ### 升级
 
-重新执行一键部署脚本即可覆盖安装到新版本。配置（`config.yaml`）与白名单数据（`allowlist.json`）保留在 `/opt/ip-allowlist/`，不会被清空。
+两种方式：
+1. **部署脚本升级**：重新执行一键部署脚本覆盖安装（配置与白名单数据保留在 `/opt/ip-allowlist/`）
+2. **页面自升级**：管理页显示当前版本 → 检查更新 → 一键升级。下载后经 **SHA256 校验**（防投毒），替换二进制并自动重启；升级失败自动回滚上一版本
 
 ### 国内镜像源（可选）
 
@@ -305,7 +314,7 @@ ip-allowlist/
 ├── web/                    # 前端页面（编译时内嵌，部署无需此目录）
 ├── deploy.sh               # 一键部署入口（curl 远程/本地都支持）
 ├── deploy/                 # systemd 单元
-├── .github/workflows/      # 发版 CI（打 tag 自动编译并发布预编译二进制）
+├── .github/workflows/      # 发版 CI + 泄露扫描（Leak Check）
 └── README.md
 ```
 
