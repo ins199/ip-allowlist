@@ -226,9 +226,9 @@ func (s *Server) handleUpgradeCheck(c *gin.Context) {
 		checkErr = err.Error()
 	}
 	c.JSON(http.StatusOK, gin.H{"code": 1, "data": gin.H{
-		"current":    s.version,
-		"latest":     latest,
-		"has_update": latest != "" && versionNewer(latest, s.version),
+		"current":     s.version,
+		"latest":      latest,
+		"has_update":  latest != "" && versionNewer(latest, s.version),
 		"check_error": checkErr,
 	}})
 }
@@ -286,11 +286,10 @@ func (s *Server) runUpgrade() error {
 		return fmt.Errorf("不支持的架构: %s", runtime.GOARCH)
 	}
 	asset := fmt.Sprintf("ip-allowlist-linux-%s", arch)
-	url := fmt.Sprintf("https://github.com/ins199/ip-allowlist/releases/latest/download/%s", asset)
-	// IPAW_MIRROR 环境变量可指定国内可达的镜像前缀（如 https://mirror.example.com/），
-	// 阿里云等国内服务器访问 GitHub release 资产常被限速/阻断。
+	// 默认走 GitHub 官方源，下载失败时自动 fallback 到 IPAW_MIRROR 镜像（国内 GitHub 受限场景）
+	urls := []string{fmt.Sprintf("https://github.com/ins199/ip-allowlist/releases/latest/download/%s", asset)}
 	if mirror := os.Getenv("IPAW_MIRROR"); mirror != "" {
-		url = strings.TrimRight(mirror, "/") + "/" + asset
+		urls = append(urls, strings.TrimRight(mirror, "/")+"/"+asset)
 	}
 
 	binPath, err := os.Executable()
@@ -300,7 +299,7 @@ func (s *Server) runUpgrade() error {
 
 	s.setUpgradeProgress("downloading", 0, "正在下载新版本...")
 	// 临时文件与目标二进制放同一目录（同一文件系统），保证 rename 原子替换不跨设备（/tmp 常为独立挂载点）
-	tmp, err := s.downloadToTemp(url, filepath.Dir(binPath))
+	tmp, err := s.downloadToTemp(urls, filepath.Dir(binPath))
 	if err != nil {
 		return fmt.Errorf("下载失败: %w", err)
 	}
@@ -416,9 +415,24 @@ func (pr *progressReader) Read(p []byte) (int, error) {
 	return n, err
 }
 
-// downloadToTemp 下载文件到 dir 目录下的临时路径，上报下载进度，校验非空且大于 1MB。
-func (s *Server) downloadToTemp(url, dir string) (string, error) {
-	client := &http.Client{Timeout: 120 * time.Second}
+// downloadToTemp 依次尝试多个下载源（默认 GitHub 官方，fallback 镜像），成功即返回；全部失败返回最后错误。
+// 每个源短超时（30s），保证镜像 fallback 快速生效。
+func (s *Server) downloadToTemp(urls []string, dir string) (string, error) {
+	client := &http.Client{Timeout: 30 * time.Second}
+	var lastErr error
+	for _, url := range urls {
+		tmp, err := s.downloadOne(client, url, dir)
+		if err == nil {
+			return tmp, nil
+		}
+		lastErr = err
+		log.Printf("自升级从 %s 下载失败，尝试下一个源: %v", url, err)
+	}
+	return "", lastErr
+}
+
+// downloadOne 从单个 URL 下载到 dir 目录下的临时路径，上报进度，校验非空且大于 1MB。
+func (s *Server) downloadOne(client *http.Client, url, dir string) (string, error) {
 	resp, err := client.Get(url)
 	if err != nil {
 		return "", err
