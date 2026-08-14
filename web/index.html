@@ -432,6 +432,12 @@
     }
 
     // ===== 最近登录记录 =====
+    function fmtTime(t) {
+      if (!t) return '';
+      // RFC3339 (2026-08-14T10:33:38+08:00) → 2026-08-14 10:33:38
+      var s = String(t).replace('T', ' ');
+      return s.length > 19 ? s.slice(0, 19) : s;
+    }
     function loadLoginLogs() {
       api('/login-logs').then(function(d) {
         if (d.code !== 1) return;
@@ -444,7 +450,7 @@
             : '<span style="display:inline-block;padding:1px 8px;border-radius:999px;font-size:12px;background:#fdecec;color:#c0392b;">失败</span>';
           return '<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid #f1f3f5;font-size:13px;">' +
             '<span>' + esc(l.username || '') + ' @ ' + esc(l.ip || '') + '</span>' +
-            '<span style="display:flex;align-items:center;gap:8px;">' + esc(l.time || '') + badge + '</span>' +
+            '<span style="display:flex;align-items:center;gap:8px;">' + fmtTime(l.time) + badge + '</span>' +
           '</div>';
         }).join('');
       }).catch(function() {});
