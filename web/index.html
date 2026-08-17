@@ -181,6 +181,19 @@
     </div>
   </div>
 
+  <!-- 编辑白名单 IP 弹窗 -->
+  <div id="edit-ip-modal" class="modal-mask hidden">
+    <div class="modal">
+      <h2>编辑白名单 IP</h2>
+      <input type="text" id="edit-ip-value" placeholder="IP 或 CIDR">
+      <input type="text" id="edit-ip-remark" placeholder="备注">
+      <div class="btn-row">
+        <button class="btn-cancel" id="edit-ip-cancel" type="button">取消</button>
+        <button class="btn-ok" id="edit-ip-ok" type="button">保存</button>
+      </div>
+    </div>
+  </div>
+
   <!-- 主界面 -->
   <div id="main-view" class="container hidden">
     <div class="topbar">
@@ -375,6 +388,30 @@
       if (e.target === this) closePassModal();
     });
 
+    // ===== 编辑白名单 IP =====
+    var currentEditIp = null;
+    function closeEditIpModal() {
+      currentEditIp = null;
+      document.getElementById('edit-ip-modal').classList.add('hidden');
+    }
+    document.getElementById('edit-ip-cancel').addEventListener('click', closeEditIpModal);
+    document.getElementById('edit-ip-ok').addEventListener('click', function() {
+      if (!currentEditIp) return;
+      var nv = document.getElementById('edit-ip-value').value.trim();
+      var remark = document.getElementById('edit-ip-remark').value.trim();
+      if (!nv) { alert('IP 不能为空'); return; }
+      api('/rule/' + currentEditIp.port + '/ip/' + encodeURIComponent(currentEditIp.ip), {
+        method: 'PUT', body: { ip: nv, remark: remark }
+      }).then(function(d) {
+        closeEditIpModal();
+        if (d.code === 1) { loadRules(); }
+        else { alert(d.msg || '更新失败'); }
+      }).catch(function() { alert('更新失败: 网络错误'); });
+    });
+    document.getElementById('edit-ip-modal').addEventListener('click', function(e) {
+      if (e.target === this) closeEditIpModal();
+    });
+
     // ===== 规则列表 =====
     function renderRules(rules) {
       var box = document.getElementById('rules-list');
@@ -389,13 +426,14 @@
         var items = (r.allow_list || []).map(function(item) {
           var isCur = item.ip === r.current_ip;
           var curTag = isCur ? '<span class="cur-tag">当前</span>' : '';
+          var editBtn = '<button class="edit-ip" data-port="' + r.port + '" data-ip="' + esc(item.ip) + '" data-remark="' + esc(item.remark || '') + '" title="编辑">✎</button>';
           var delBtn = isCur
             ? ''
             : '<button class="del-ip" data-port="' + r.port + '" data-ip="' + esc(item.ip) + '" title="删除">✕</button>';
           // 旧版本自动加入的历史备注带"当前来源"字样，与实时"当前"标签(是isCur判断)冲突，统一归一化为 auto
           var remarkText = item.remark === 'auto(当前来源)' ? 'auto' : (item.remark || '');
           var remark = remarkText ? '<span class="remark">(' + esc(remarkText) + ')</span>' : '';
-          return '<span class="ip-item' + (isCur ? ' current' : '') + '">' + esc(item.ip) + remark + curTag + delBtn + '</span>';
+          return '<span class="ip-item' + (isCur ? ' current' : '') + '">' + esc(item.ip) + remark + curTag + editBtn + delBtn + '</span>';
         }).join('') || '<span style="color:#9ca3af;font-size:13px;">暂无白名单 IP</span>';
 
         return '<div class="rule">' +
@@ -626,6 +664,16 @@
           alert(d.msg || (d.code === 1 ? '成功' : '失败'));
           if (d.code === 1) loadRules();
         });
+        return;
+      }
+      var editIp = e.target.closest('.edit-ip');
+      if (editIp) {
+        var eport = editIp.getAttribute('data-port');
+        var eip = editIp.getAttribute('data-ip');
+        document.getElementById('edit-ip-value').value = eip;
+        document.getElementById('edit-ip-remark').value = editIp.getAttribute('data-remark') || '';
+        currentEditIp = { port: eport, ip: eip };
+        document.getElementById('edit-ip-modal').classList.remove('hidden');
         return;
       }
       var delIp = e.target.closest('.del-ip');

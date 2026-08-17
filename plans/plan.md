@@ -35,6 +35,7 @@
 - [x] 版本号自动生成：CI/deploy.sh 用 ldflags 从 git tag 注入，发版只打 tag
 - [x] 安全：plans/plan.md 与 git 历史脱敏（filter-repo 重写）
 - [x] 文档：中英双语 README（README.md + README.en.md）+ CHANGELOG 正式版
+- [x] 白名单 IP 编辑：改 IP 值 + 备注（`PUT /api/rule/:port/ip/:ip`，防锁死：严格模式禁止改当前来源 IP 地址）
 
 ## 测试清单
 
@@ -45,6 +46,7 @@
 - [x] 真机部署到服务器验证（测试服务器 从 0 部署 + 自升级全链路）
 - [x] 重启恢复验证
 - [x] 单元测试（iptables 规则生成/防锁死、store 增删/持久化/损坏恢复、auth 密码/JWT）
+- [x] IP 编辑功能：dry-run 本地验证（改备注/改IP/不存在/非法IP），API 正常
 
 ## 待办
 

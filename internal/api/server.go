@@ -82,6 +82,7 @@ func New(st *store.Store, ipt *iptables.Executor, a *auth.Auth, webContent fs.FS
 		authGroup.POST("/rule", s.handleUpsertRule)
 		authGroup.DELETE("/rule/:port", s.handleDeleteRule)
 		authGroup.POST("/rule/:port/ip", s.handleAddIP)
+		authGroup.PUT("/rule/:port/ip/:ip", s.handleUpdateIP)
 		authGroup.DELETE("/rule/:port/ip/:ip", s.handleDelIP)
 		authGroup.POST("/rule/:port/strict", s.handleSetStrict)
 		authGroup.GET("/me", s.handleMe)
@@ -765,6 +766,50 @@ func (s *Server) handleDelIP(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"code": 1, "msg": "已删除并应用"})
+}
+
+// handleUpdateIP 编辑白名单 IP：可改 IP 地址和/或备注。body {ip, remark}，ip 为新地址。
+func (s *Server) handleUpdateIP(c *gin.Context) {
+	port, err := strconv.Atoi(c.Param("port"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"code": 0, "msg": "端口非法"})
+		return
+	}
+	oldIP := c.Param("ip")
+	var req addIPReq
+	if err := c.ShouldBindJSON(&req); err != nil || !iptables.ValidIPorCIDR(strings.TrimSpace(req.IP)) {
+		c.JSON(http.StatusBadRequest, gin.H{"code": 0, "msg": "IP或CIDR非法"})
+		return
+	}
+	req.IP = strings.TrimSpace(req.IP)
+	cur := clientIP(c)
+
+	// 防锁死：严格模式下禁止修改当前来源 IP 的地址（会锁死）
+	rule := s.store.GetRule(port)
+	if rule != nil && rule.Strict && oldIP == cur && req.IP != oldIP {
+		c.JSON(http.StatusBadRequest, gin.H{"code": 0, "msg": "严格模式下禁止修改当前来源 IP（会锁死）"})
+		return
+	}
+
+	updated, err := s.store.UpdateIP(port, oldIP, req.IP, req.Remark)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"code": 0, "msg": err.Error()})
+		return
+	}
+	if !updated {
+		c.JSON(http.StatusBadRequest, gin.H{"code": 0, "msg": "IP 不在白名单中"})
+		return
+	}
+	rule = s.store.GetRule(port)
+	if rule == nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"code": 0, "msg": "规则不存在"})
+		return
+	}
+	if err := s.ipt.ApplyPortRule(*rule, cur); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"code": 0, "msg": "保存成功但应用iptables失败: " + err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"code": 1, "msg": "已更新并应用"})
 }
 
 type strictReq struct {

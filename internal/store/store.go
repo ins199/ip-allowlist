@@ -210,6 +210,39 @@ func (s *Store) DelIP(port int, ip string) (bool, error) {
 	return false, nil
 }
 
+// UpdateIP 编辑白名单 IP：改 IP 值和/或备注。oldIP 不存在返回 false；newIP 与其他项冲突返回错误。
+func (s *Store) UpdateIP(port int, oldIP, newIP, newRemark string) (bool, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for i := range s.cfg.Rules {
+		if s.cfg.Rules[i].Port != port {
+			continue
+		}
+		rule := &s.cfg.Rules[i]
+		idx := -1
+		for j := range rule.AllowList {
+			if rule.AllowList[j].IP == oldIP {
+				idx = j
+				break
+			}
+		}
+		if idx < 0 {
+			return false, nil // oldIP 不存在
+		}
+		// newIP 冲突检查（与除 oldIP 外的项比较）
+		if newIP != oldIP {
+			for j, item := range rule.AllowList {
+				if j != idx && item.IP == newIP {
+					return false, fmt.Errorf("IP %s 已存在", newIP)
+				}
+			}
+		}
+		rule.AllowList[idx] = AllowItem{IP: newIP, Remark: newRemark}
+		return true, s.saveLocked()
+	}
+	return false, nil
+}
+
 // SetStrict 设置端口严格模式并保存。
 func (s *Store) SetStrict(port int, strict bool) error {
 	s.mu.Lock()

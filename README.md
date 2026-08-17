@@ -216,6 +216,7 @@ Environment=IPAW_MIRROR=https://your-bucket.oss-cn-shenzhen.aliyuncs.com/
 | POST | `/api/rule` | 新增/更新端口规则，body `{port, comment, strict}` |
 | DELETE | `/api/rule/:port` | 删除端口规则 |
 | POST | `/api/rule/:port/ip` | 添加白名单 IP，body `{ip, remark}` |
+| PUT  | `/api/rule/:port/ip/:ip` | 编辑白名单 IP（改地址/备注），body `{ip, remark}` |
 | DELETE | `/api/rule/:port/ip/:ip` | 删除白名单 IP |
 | POST | `/api/rule/:port/strict` | 切换严格模式，body `{strict}` |
 | GET  | `/api/me` | 当前登录信息（用户名 + 来源 IP） |
