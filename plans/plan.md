@@ -132,3 +132,4 @@
 | 2026-08-14 | 安全双保险：gitleaks 密钥格式扫描（CI gitleaks-action + 本地 pre-commit hook）+ 现有 leak-check 内部敏感词（GitHub Secret）。修复 plan.md 记录修复时误写敏感词 |
 | 2026-08-14 | ygg 同步升级 v1.0.0：旧版(config 无 secret)升级后 C2 拒绝默认 secret 致启动失败循环重启，手动补随机 secret 恢复。⚠️ 升级兼容：老部署(config 无 secret)升级到 v1.0.0 需设 secret，旧版升级不写 I2 标记故不自动回滚 |
 | 2026-08-17 | feat: 白名单 IP 编辑（v1.0.1）——`PUT /api/rule/:port/ip/:ip` 改 IP 值+备注，前端 ✎ 编辑按钮+弹窗，防锁死限制改当前来源 IP。config.example.yaml secret 改示例随机值（v1.0.0 拒绝默认）。已部署 zkkf(scp) + ygg(自升级，I2 标记机制真机验证：检测标记→启动成功→清除) |
+| 2026-08-17 | style（v1.0.2）：编辑按钮统一为透明小按钮样式（hover 蓝），与删除按钮协调。已部署 zkkf + ygg |
