@@ -74,9 +74,11 @@
     }
     .ip-item.current { background: #e0e7ff; }
     .ip-item .remark { color: #9ca3af; font-size: 12px; }
-    .ip-item .del-ip {
-      border: none; background: transparent; color: #9ca3af; cursor: pointer; font-size: 14px; line-height: 1;
+    .ip-item .edit-ip, .ip-item .del-ip {
+      border: none; background: transparent; color: #9ca3af; cursor: pointer; line-height: 1;
+      font-size: 13px; padding: 0; margin: 0; transition: color .15s;
     }
+    .ip-item .edit-ip:hover { color: #4f46e5; }
     .ip-item .del-ip:hover { color: #d93025; }
     .ip-item .cur-tag { font-size: 11px; color: #6366f1; }
 
